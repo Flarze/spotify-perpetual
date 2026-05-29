@@ -23,8 +23,21 @@ def test_main_wires_config_client_and_run(monkeypatch):
     monkeypatch.setattr(entry, "build_client", fake_build_client)
     monkeypatch.setattr(entry, "run", fake_run)
 
-    entry.main()
+    entry.main([])
 
     assert calls["load"] is True
     assert calls["build"] is fake_config
     assert calls["run"] == (fake_config, fake_client)
+
+
+def test_main_dispatches_subcommands(monkeypatch):
+    calls = []
+    monkeypatch.setattr(entry.autostart, "install", lambda: calls.append("install"))
+    monkeypatch.setattr(entry.autostart, "uninstall", lambda: calls.append("uninstall"))
+    monkeypatch.setattr(entry.autostart, "status", lambda: calls.append("status"))
+
+    entry.main(["install"])
+    entry.main(["uninstall"])
+    entry.main(["status"])
+
+    assert calls == ["install", "uninstall", "status"]

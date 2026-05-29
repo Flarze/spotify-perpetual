@@ -1,6 +1,10 @@
 # Internal planning docs (not for public repo)
 MVP.md
 BUILD.md
+docs/superpowers/
+
+# Generated autostart wrapper (created by `idle-player install`)
+autostart_run.bat
 
 # Secrets — NEVER commit these
 .env

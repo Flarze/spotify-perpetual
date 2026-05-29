@@ -30,8 +30,11 @@ and your speakers are never silent again.
 ```bash
 git clone https://github.com/Flarze/spotify-perpetual.git
 cd spotify-perpetual
-pip install -r requirements.txt
+pip install -e .
 ```
+
+This installs the dependencies and the `idle-player` command. (Use a
+virtualenv if you prefer to keep things isolated.)
 
 ## Configuration
 
@@ -64,10 +67,24 @@ browser needed. Leave it running and it keeps your playlist alive.
 
 ## Running at startup
 
-Autostart is configured per operating system. Step-by-step guides and templates
+From the repo root, in the same environment where you installed the package,
+run the built-in installer:
+
+```bash
+idle-player install      # create the autostart entry for your OS
+idle-player status       # check whether it is installed
+idle-player uninstall    # remove it
+```
+
+This creates the right entry for your platform automatically: a Task Scheduler
+task on Windows, a launchd agent on macOS, or a systemd user service on Linux.
+Run `idle-player` once first to complete the browser login so autostart can run
+headless.
+
+Prefer to set it up by hand? Per-OS templates and step-by-step instructions
 live in [`scripts/`](scripts/):
 
-- **Windows:** [Task Scheduler](scripts/windows_task_scheduler.md) ("At log on", via `pythonw`)
+- **Windows:** [Task Scheduler](scripts/windows_task_scheduler.md)
 - **macOS:** [launchd agent](scripts/macos_launchd.md)
 - **Linux:** [systemd user service](scripts/linux_systemd.md)
 
