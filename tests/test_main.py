@@ -22,12 +22,26 @@ def test_main_wires_config_client_and_run(monkeypatch):
     monkeypatch.setattr(entry, "load_config", fake_load_config)
     monkeypatch.setattr(entry, "build_client", fake_build_client)
     monkeypatch.setattr(entry, "run", fake_run)
+    monkeypatch.setattr(entry.single_instance, "acquire", lambda path: True)
+    monkeypatch.setattr(entry.single_instance, "release", lambda path: None)
 
     entry.main([])
 
     assert calls["load"] is True
     assert calls["build"] is fake_config
     assert calls["run"] == (fake_config, fake_client)
+
+
+def test_main_exits_if_another_instance_running(monkeypatch):
+    calls = {"run": False}
+    monkeypatch.setattr(entry, "load_config", lambda: object())
+    monkeypatch.setattr(entry, "build_client", lambda c: (_ for _ in ()).throw(AssertionError("should not auth")))
+    monkeypatch.setattr(entry, "run", lambda c, sp: calls.__setitem__("run", True))
+    monkeypatch.setattr(entry.single_instance, "acquire", lambda path: False)
+
+    entry.main([])  # should return without running
+
+    assert calls["run"] is False
 
 
 def test_main_dispatches_subcommands(monkeypatch):

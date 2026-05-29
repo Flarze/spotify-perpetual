@@ -12,7 +12,7 @@ runs it. Subcommands manage OS autostart:
 import argparse
 from typing import Optional, Sequence
 
-from . import autostart
+from . import autostart, single_instance
 from .auth import build_client
 from .config import load_config
 from .loop import run
@@ -34,9 +34,16 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     elif args.command == "status":
         autostart.status()
     else:
-        config = load_config()
-        sp = build_client(config)
-        run(config, sp)
+        lock_path = single_instance.default_lock_path()
+        if not single_instance.acquire(lock_path):
+            print("idle_player is already running; exiting.")
+            return
+        try:
+            config = load_config()
+            sp = build_client(config)
+            run(config, sp)
+        finally:
+            single_instance.release(lock_path)
 
 
 if __name__ == "__main__":
