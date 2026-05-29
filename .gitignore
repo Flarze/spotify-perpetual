@@ -1,3 +1,6 @@
+# Internal planning docs (not for public repo)
+MVP.md
+
 # Secrets — NEVER commit these
 .env
 .cache
