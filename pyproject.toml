@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spotify-perpetual"
+version = "0.1.0"
+description = "Keep Spotify playing: poll playback, launch Spotify and start a playlist when idle."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+    "spotipy",
+    "python-dotenv",
+    "psutil",
+    "PyYAML",
+]
+
+[project.scripts]
+idle-player = "idle_player.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.optional-dependencies]
+dev = ["pytest"]

@@ -1,0 +1,17 @@
+# Optional config. Copy to config.yaml (gitignored) to override .env defaults.
+
+poll_interval: 30            # seconds between playback checks
+playlist_uri: ""             # spotify:playlist:... to start when idle
+
+# Treat paused-but-loaded as "listening" (don't restart playback).
+paused_counts_as_playing: true
+
+device:
+  preferred_name: ""         # optional: prefer this Connect device by name
+  launch_wait_seconds: 8     # wait after launching Spotify before retry
+
+logging:
+  level: INFO
+  file: logs/idle_player.log
+  max_bytes: 1048576         # rotate at ~1 MB
+  backup_count: 3
