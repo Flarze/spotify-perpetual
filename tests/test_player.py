@@ -57,6 +57,15 @@ def test_paused_not_counting_starts():
     assert should_start_playback(playback, paused_counts_as_playing=False) is True
 
 
+def test_idle_active_device_no_item_starts_regardless_of_flag():
+    # Device active but nothing loaded (e.g. playlist finished/stopped).
+    # This is truly idle, not a user pause, so we restart even when
+    # paused_counts_as_playing is True.
+    playback = {"is_playing": False, "item": None}
+    assert should_start_playback(playback, paused_counts_as_playing=True) is True
+    assert should_start_playback(playback, paused_counts_as_playing=False) is True
+
+
 # --- get_playback ---------------------------------------------------------
 
 

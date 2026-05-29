@@ -67,6 +67,13 @@ def test_defaults_applied_when_optional_missing(tmp_path):
     assert config.log_level == "INFO"
 
 
+def test_blank_numeric_env_uses_default(tmp_path):
+    # A user blanking an optional numeric field must not crash with int("").
+    env = write_env(tmp_path / ".env", POLL_INTERVAL="")
+    config = load_config(env_path=env)
+    assert config.poll_interval == 30
+
+
 def test_missing_required_field_raises_readable_error(tmp_path):
     env = write_env(tmp_path / ".env", PLAYLIST_URI="")
 

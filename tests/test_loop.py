@@ -73,6 +73,10 @@ def test_setup_logging_configures_rotating_handler(tmp_path):
     assert logger.level == logging.DEBUG
     # Parent log directory is created.
     assert (tmp_path / "logs").is_dir()
+    # A console handler is attached so foreground runs are not silent.
+    assert any(
+        type(h) is logging.StreamHandler for h in logger.handlers
+    ), "expected a console StreamHandler"
 
 
 # --- run_once -------------------------------------------------------------

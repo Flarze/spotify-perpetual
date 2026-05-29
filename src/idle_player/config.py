@@ -63,6 +63,20 @@ def _to_bool(value) -> bool:
     return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _to_int(value, default: int) -> int:
+    """Parse an int, falling back to default for None or blank values.
+
+    Avoids ``int("")`` crashing when a user leaves an optional numeric field
+    blank in .env.
+    """
+    if value is None:
+        return default
+    text = str(value).strip()
+    if not text:
+        return default
+    return int(text)
+
+
 def load_config(
     env_path: Optional[os.PathLike] = None,
     yaml_path: Optional[os.PathLike] = None,
@@ -114,7 +128,7 @@ def load_config(
         client_secret=values["client_secret"],
         redirect_uri=values["redirect_uri"],
         playlist_uri=_normalize_playlist_uri(values["playlist_uri"]),
-        poll_interval=int(values["poll_interval"]) if values.get("poll_interval") is not None else defaults.poll_interval,
+        poll_interval=_to_int(values.get("poll_interval"), defaults.poll_interval),
         token_cache_path=values["token_cache_path"] or defaults.token_cache_path,
         paused_counts_as_playing=(
             _to_bool(values["paused_counts_as_playing"])
@@ -122,11 +136,11 @@ def load_config(
             else defaults.paused_counts_as_playing
         ),
         preferred_device_name=values.get("preferred_device_name", defaults.preferred_device_name),
-        launch_wait_seconds=int(values.get("launch_wait_seconds", defaults.launch_wait_seconds)),
+        launch_wait_seconds=_to_int(values.get("launch_wait_seconds"), defaults.launch_wait_seconds),
         log_level=values.get("log_level", defaults.log_level),
         log_file=values.get("log_file", defaults.log_file),
-        log_max_bytes=int(values.get("log_max_bytes", defaults.log_max_bytes)),
-        log_backup_count=int(values.get("log_backup_count", defaults.log_backup_count)),
+        log_max_bytes=_to_int(values.get("log_max_bytes"), defaults.log_max_bytes),
+        log_backup_count=_to_int(values.get("log_backup_count"), defaults.log_backup_count),
     )
 
 

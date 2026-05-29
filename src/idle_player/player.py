@@ -37,6 +37,10 @@ def should_start_playback(
     if playback.get("is_playing"):
         return False
 
+    # Active device but nothing loaded -> truly idle, always (re)start.
+    if playback.get("item") is None:
+        return True
+
     # Paused with a loaded track: honor the config flag.
     return not paused_counts_as_playing
 

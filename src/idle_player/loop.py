@@ -27,17 +27,24 @@ def setup_logging(config: Config) -> logging.Logger:
     logger = logging.getLogger(LOGGER_NAME)
     logger.setLevel(getattr(logging, config.log_level.upper(), logging.INFO))
 
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+
     # Avoid stacking duplicate handlers if called more than once.
     if not any(isinstance(h, RotatingFileHandler) for h in logger.handlers):
-        handler = RotatingFileHandler(
+        file_handler = RotatingFileHandler(
             log_path,
             maxBytes=config.log_max_bytes,
             backupCount=config.log_backup_count,
         )
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s %(levelname)s %(message)s")
-        )
-        logger.addHandler(handler)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
+    # Console output so foreground runs are not silent. RotatingFileHandler is a
+    # StreamHandler subclass, so match on exact type to detect the console one.
+    if not any(type(h) is logging.StreamHandler for h in logger.handlers):
+        console = logging.StreamHandler()
+        console.setFormatter(formatter)
+        logger.addHandler(console)
 
     return logger
 
