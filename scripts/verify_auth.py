@@ -3,7 +3,7 @@
 Run:  python scripts/verify_auth.py
 
 First run opens (or prints) the Spotify authorize URL. Log in, then you are
-redirected to http://localhost:8888/callback?code=...  — if no browser opens
+redirected to http://127.0.0.1:8888/callback?code=...  If no browser opens
 (e.g. WSL/headless), copy that full redirected URL from the address bar and
 paste it back when prompted. A token cache file is then written; later runs
 print playback with no prompt.

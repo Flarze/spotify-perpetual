@@ -1,4 +1,4 @@
-# macOS autostart — launchd
+# macOS autostart: launchd
 
 Run idle_player at login via a per-user LaunchAgent.
 

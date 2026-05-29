@@ -1,21 +1,21 @@
 # spotify-perpetual
 
 Never let the music stop. **spotify-perpetual** watches your Spotify playback
-and automatically resumes a playlist whenever nothing is playing — launching
+and automatically resumes a playlist whenever nothing is playing, launching
 the Spotify app first if it isn't running. Set it up once, add it to startup,
 and your speakers are never silent again.
 
 ## Features
 
-- **Idle detection** — polls playback on a configurable interval (default ~30s).
-- **Auto-resume** — starts your chosen playlist the moment playback stops or no
+- **Idle detection:** polls playback on a configurable interval (default ~30s).
+- **Auto-resume:** starts your chosen playlist the moment playback stops or no
   device is active.
-- **App launch fallback** — if Spotify isn't running, launches it, waits for it
+- **App launch fallback:** if Spotify isn't running, launches it, waits for it
   to come online as a Connect device, then starts playback.
-- **Cross-platform** — Windows, macOS, and Linux process detection and launch.
-- **Set-and-forget** — runs headless after a one-time login; resilient to
+- **Cross-platform:** Windows, macOS, and Linux process detection and launch.
+- **Set-and-forget:** runs headless after a one-time login, resilient to
   transient network/API errors.
-- **Configurable** — playlist, interval, and whether a paused track counts as
+- **Configurable:** playlist, interval, and whether a paused track counts as
   "still listening" are all settings, not hardcoded.
 
 ## Requirements
@@ -36,7 +36,7 @@ pip install -r requirements.txt
 ## Configuration
 
 1. Create an app in the [Spotify developer dashboard](https://developer.spotify.com/dashboard)
-   and add a redirect URI (e.g. `http://localhost:8888/callback`).
+   and add a redirect URI (e.g. `http://127.0.0.1:8888/callback`).
 2. Copy the template and fill in your values:
 
    ```bash
@@ -59,7 +59,7 @@ The first run opens a browser once to authorize your account:
 python -m idle_player
 ```
 
-After that, the access token is cached and every later run is headless — no
+After that, the access token is cached and every later run is headless, with no
 browser needed. Leave it running and it keeps your playlist alive.
 
 ## Running at startup
@@ -67,13 +67,13 @@ browser needed. Leave it running and it keeps your playlist alive.
 Autostart is configured per operating system. Step-by-step guides and templates
 live in [`scripts/`](scripts/):
 
-- **Windows** — [Task Scheduler](scripts/windows_task_scheduler.md) ("At log on", via `pythonw`)
-- **macOS** — [launchd agent](scripts/macos_launchd.md)
-- **Linux** — [systemd user service](scripts/linux_systemd.md)
+- **Windows:** [Task Scheduler](scripts/windows_task_scheduler.md) ("At log on", via `pythonw`)
+- **macOS:** [launchd agent](scripts/macos_launchd.md)
+- **Linux:** [systemd user service](scripts/linux_systemd.md)
 
 ## Security
 
-The OAuth token cache grants access to your Spotify account — **treat it as a
+The OAuth token cache grants access to your Spotify account, so **treat it as a
 secret.** It and your `.env` are excluded by `.gitignore` and should never be
 committed or shared.
 

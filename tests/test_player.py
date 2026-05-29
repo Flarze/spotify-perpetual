@@ -1,6 +1,6 @@
 """Tests for the playback decision logic.
 
-The decision function (player module) is pure — it takes a current_playback()
+The decision function (player module) is pure. It takes a current_playback()
 response shape and config flags, and returns whether to start playback. These
 tests mock spotipy responses; they never hit the network.
 """

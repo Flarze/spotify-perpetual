@@ -1,4 +1,4 @@
-# Windows autostart — Task Scheduler
+# Windows autostart: Task Scheduler
 
 Run idle_player at log on, headless, using `pythonw` (no console window).
 
@@ -9,7 +9,7 @@ Run idle_player at log on, headless, using `pythonw` (no console window).
 
 1. Open **Task Scheduler** → **Create Task** (not "Basic Task").
 2. **General**: name it `spotify-perpetual`. Check "Run only when user is
-   logged on". (Don't tick "hidden" expecting headless — `pythonw` handles the
+   logged on". (Don't tick "hidden" expecting headless; `pythonw` handles the
    no-window part.)
 3. **Triggers** → New → "At log on".
 4. **Actions** → New → Start a program:
@@ -34,5 +34,5 @@ schtasks /Create /TN "spotify-perpetual" /SC ONLOGON ^
   /TR "pythonw -m idle_player" /RL LIMITED
 ```
 
-Set the working dir via the GUI ("Start in") or wrap with a .bat as above —
+Set the working dir via the GUI ("Start in") or wrap with a .bat as above.
 `schtasks /TR` has no separate working-directory flag.

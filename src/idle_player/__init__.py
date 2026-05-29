@@ -1,4 +1,4 @@
-"""idle_player — keep Spotify playing when idle.
+"""idle_player: keep Spotify playing when idle.
 
 Polls playback state; launches Spotify and starts a configured playlist when
 nothing is playing or no active Connect device exists.

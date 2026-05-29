@@ -1,4 +1,4 @@
-# Linux autostart — systemd user unit
+# Linux autostart: systemd user unit
 
 Run idle_player as a per-user service that starts at login.
 
@@ -13,7 +13,7 @@ Replace `%h` paths if your checkout lives elsewhere.
 
 ```ini
 [Unit]
-Description=spotify-perpetual — keep Spotify playing when idle
+Description=spotify-perpetual: keep Spotify playing when idle
 After=network-online.target
 Wants=network-online.target
 
