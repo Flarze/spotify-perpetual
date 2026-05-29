@@ -76,6 +76,30 @@ def test_missing_required_field_raises_readable_error(tmp_path):
     assert "PLAYLIST_URI" in str(exc.value)
 
 
+def test_playlist_uri_already_in_uri_form_unchanged(tmp_path):
+    env = write_env(tmp_path / ".env", PLAYLIST_URI="spotify:playlist:37i9dQZF1DX")
+    config = load_config(env_path=env)
+    assert config.playlist_uri == "spotify:playlist:37i9dQZF1DX"
+
+
+def test_playlist_url_normalized_to_uri(tmp_path):
+    env = write_env(
+        tmp_path / ".env",
+        PLAYLIST_URI="https://open.spotify.com/playlist/37i9dQZF1DX?si=abc123",
+    )
+    config = load_config(env_path=env)
+    assert config.playlist_uri == "spotify:playlist:37i9dQZF1DX"
+
+
+def test_playlist_url_without_query_normalized(tmp_path):
+    env = write_env(
+        tmp_path / ".env",
+        PLAYLIST_URI="https://open.spotify.com/playlist/37i9dQZF1DX",
+    )
+    config = load_config(env_path=env)
+    assert config.playlist_uri == "spotify:playlist:37i9dQZF1DX"
+
+
 def test_yaml_overrides_env(tmp_path):
     env = write_env(tmp_path / ".env", POLL_INTERVAL="30")
     yaml_path = tmp_path / "config.yaml"

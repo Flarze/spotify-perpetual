@@ -13,6 +13,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 import yaml
 from dotenv import dotenv_values
@@ -36,6 +37,24 @@ class Config:
 
 
 _REQUIRED = ("client_id", "client_secret", "redirect_uri", "playlist_uri")
+
+
+def _normalize_playlist_uri(value: str) -> str:
+    """Accept either a Spotify URI or an open.spotify.com link, return the URI.
+
+    ``spotify:playlist:<id>`` is returned unchanged. A web link such as
+    ``https://open.spotify.com/playlist/<id>?si=...`` is rewritten to
+    ``spotify:playlist:<id>`` (query string dropped). Anything else is returned
+    as-is for the caller/Spotify to reject.
+    """
+    value = value.strip()
+    if value.startswith("https://open.spotify.com/"):
+        path = urlparse(value).path.strip("/")  # e.g. "playlist/<id>"
+        parts = path.split("/")
+        if len(parts) >= 2:
+            kind, item_id = parts[0], parts[1]
+            return f"spotify:{kind}:{item_id}"
+    return value
 
 
 def _to_bool(value) -> bool:
@@ -94,7 +113,7 @@ def load_config(
         client_id=values["client_id"],
         client_secret=values["client_secret"],
         redirect_uri=values["redirect_uri"],
-        playlist_uri=values["playlist_uri"],
+        playlist_uri=_normalize_playlist_uri(values["playlist_uri"]),
         poll_interval=int(values["poll_interval"]) if values.get("poll_interval") is not None else defaults.poll_interval,
         token_cache_path=values["token_cache_path"] or defaults.token_cache_path,
         paused_counts_as_playing=(
