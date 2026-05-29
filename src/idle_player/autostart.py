@@ -35,11 +35,23 @@ def _pythonw(python_exe: str) -> str:
     return python_exe
 
 
-def _windows_bat(python_exe: str, workdir: str) -> str:
+def _windows_vbs(python_exe: str, workdir: str) -> str:
+    """A startup .vbs that launches idle_player hidden, with the repo as cwd.
+
+    Run mode 0 = no window; False = don't wait. Setting CurrentDirectory means
+    `.env` and `logs\\` resolve against the repo root.
+    """
     return (
-        "@echo off\r\n"
-        f'cd /d "{workdir}"\r\n'
-        f'"{python_exe}" -m idle_player\r\n'
+        'Set sh = CreateObject("WScript.Shell")\r\n'
+        f'sh.CurrentDirectory = "{workdir}"\r\n'
+        f'sh.Run """{python_exe}"" -m idle_player", 0, False\r\n'
+    )
+
+
+def _windows_startup_dir() -> Path:
+    return (
+        Path(os.environ["APPDATA"])
+        / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
     )
 
 
@@ -123,13 +135,10 @@ def install() -> None:
     platform = sys.platform
 
     if platform == "win32":
-        bat_path = Path(workdir) / "autostart_run.bat"
-        bat_path.write_text(_windows_bat(python_exe, workdir), encoding="ascii")
-        _run([
-            "schtasks", "/Create", "/TN", TASK_NAME, "/SC", "ONLOGON",
-            "/TR", str(bat_path), "/F",
-        ])
-        print(f"Installed Task Scheduler task '{TASK_NAME}'.")
+        vbs_path = _windows_startup_dir() / f"{TASK_NAME}.vbs"
+        vbs_path.parent.mkdir(parents=True, exist_ok=True)
+        vbs_path.write_text(_windows_vbs(python_exe, workdir), encoding="ascii")
+        print(f"Installed startup entry at {vbs_path}.")
     elif platform == "darwin":
         plist_path = Path.home() / "Library" / "LaunchAgents" / f"{MACOS_LABEL}.plist"
         plist_path.parent.mkdir(parents=True, exist_ok=True)
@@ -153,10 +162,9 @@ def uninstall() -> None:
     platform = sys.platform
 
     if platform == "win32":
-        _run(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"])
-        bat_path = Path.cwd() / "autostart_run.bat"
-        bat_path.unlink(missing_ok=True)
-        print(f"Removed Task Scheduler task '{TASK_NAME}'.")
+        vbs_path = _windows_startup_dir() / f"{TASK_NAME}.vbs"
+        vbs_path.unlink(missing_ok=True)
+        print("Removed startup entry.")
     elif platform == "darwin":
         plist_path = Path.home() / "Library" / "LaunchAgents" / f"{MACOS_LABEL}.plist"
         if plist_path.exists():
@@ -179,10 +187,8 @@ def status() -> None:
     platform = sys.platform
 
     if platform == "win32":
-        result = subprocess.run(
-            ["schtasks", "/Query", "/TN", TASK_NAME], capture_output=True, text=True
-        )
-        print("installed" if result.returncode == 0 else "not installed")
+        vbs_path = _windows_startup_dir() / f"{TASK_NAME}.vbs"
+        print("installed" if vbs_path.exists() else "not installed")
     elif platform == "darwin":
         plist_path = Path.home() / "Library" / "LaunchAgents" / f"{MACOS_LABEL}.plist"
         print("installed" if plist_path.exists() else "not installed")

@@ -76,8 +76,9 @@ idle-player status       # check whether it is installed
 idle-player uninstall    # remove it
 ```
 
-This creates the right entry for your platform automatically: a Task Scheduler
-task on Windows, a launchd agent on macOS, or a systemd user service on Linux.
+This creates the right entry for your platform automatically: a Startup-folder
+launcher on Windows (no admin needed), a launchd agent on macOS, or a systemd
+user service on Linux.
 Run `idle-player` once first to complete the browser login so autostart can run
 headless.
 

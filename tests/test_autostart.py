@@ -8,11 +8,12 @@ Windows pythonw swap are pure and tested here. The actual schtasks / launchctl
 from idle_player import autostart
 
 
-def test_windows_bat_cds_to_workdir_and_runs_module():
-    bat = autostart._windows_bat(r"C:\repo\.venv\Scripts\pythonw.exe", r"C:\repo")
-    assert 'cd /d "C:\\repo"' in bat
-    assert r"C:\repo\.venv\Scripts\pythonw.exe" in bat
-    assert "-m idle_player" in bat
+def test_windows_vbs_sets_workdir_and_runs_module_hidden():
+    vbs = autostart._windows_vbs(r"C:\repo\.venv\Scripts\pythonw.exe", r"C:\repo")
+    assert 'sh.CurrentDirectory = "C:\\repo"' in vbs
+    assert r"C:\repo\.venv\Scripts\pythonw.exe" in vbs
+    assert "-m idle_player" in vbs
+    assert ", 0, False" in vbs  # hidden window, non-blocking
 
 
 def test_macos_plist_has_paths_trigger_and_module():
