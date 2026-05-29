@@ -59,7 +59,7 @@ virtualenv if you prefer to keep things isolated.)
 The first run opens a browser once to authorize your account:
 
 ```bash
-python -m idle_player
+idle-player          # or: python -m idle_player
 ```
 
 After that, the access token is cached and every later run is headless, with no
