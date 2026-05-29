@@ -20,6 +20,10 @@ from .config import load_config
 
 TASK_NAME = "spotify-perpetual"
 MACOS_LABEL = "com.spotify-perpetual.idle"
+# Windows Startup-folder shortcut. The display name (no extension) is what Task
+# Manager's Startup tab shows.
+WINDOWS_DISPLAY_NAME = "Spotify Perpetual"
+_LEGACY_VBS_NAME = "spotify-perpetual.vbs"
 
 
 # --- pure builders --------------------------------------------------------
@@ -35,16 +39,23 @@ def _pythonw(python_exe: str) -> str:
     return python_exe
 
 
-def _windows_vbs(python_exe: str, workdir: str) -> str:
-    """A startup .vbs that launches idle_player hidden, with the repo as cwd.
+def _windows_shortcut_script(lnk_path: str, python_exe: str, workdir: str) -> str:
+    """PowerShell that creates a Startup shortcut launching idle_player.
 
-    Run mode 0 = no window; False = don't wait. Setting CurrentDirectory means
-    `.env` and `logs\\` resolve against the repo root.
+    The shortcut targets pythonw.exe directly (no console window, no wscript
+    host) with the repo as its working directory so `.env` and `logs\\` resolve.
+    WindowStyle 7 = minimized; pythonw shows nothing anyway. The shortcut's file
+    name (without `.lnk`) is what Task Manager's Startup tab displays.
     """
     return (
-        'Set sh = CreateObject("WScript.Shell")\r\n'
-        f'sh.CurrentDirectory = "{workdir}"\r\n'
-        f'sh.Run """{python_exe}"" -m idle_player", 0, False\r\n'
+        "$s = (New-Object -ComObject WScript.Shell)."
+        f"CreateShortcut('{lnk_path}'); "
+        f"$s.TargetPath = '{python_exe}'; "
+        "$s.Arguments = '-m idle_player'; "
+        f"$s.WorkingDirectory = '{workdir}'; "
+        "$s.WindowStyle = 7; "
+        f"$s.Description = '{WINDOWS_DISPLAY_NAME}'; "
+        "$s.Save()"
     )
 
 
@@ -135,10 +146,13 @@ def install() -> None:
     platform = sys.platform
 
     if platform == "win32":
-        vbs_path = _windows_startup_dir() / f"{TASK_NAME}.vbs"
-        vbs_path.parent.mkdir(parents=True, exist_ok=True)
-        vbs_path.write_text(_windows_vbs(python_exe, workdir), encoding="ascii")
-        print(f"Installed startup entry at {vbs_path}.")
+        startup = _windows_startup_dir()
+        startup.mkdir(parents=True, exist_ok=True)
+        (startup / _LEGACY_VBS_NAME).unlink(missing_ok=True)  # remove old .vbs entry
+        lnk_path = startup / f"{WINDOWS_DISPLAY_NAME}.lnk"
+        script = _windows_shortcut_script(str(lnk_path), python_exe, workdir)
+        _run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script])
+        print(f"Installed startup shortcut at {lnk_path}.")
     elif platform == "darwin":
         plist_path = Path.home() / "Library" / "LaunchAgents" / f"{MACOS_LABEL}.plist"
         plist_path.parent.mkdir(parents=True, exist_ok=True)
@@ -162,8 +176,9 @@ def uninstall() -> None:
     platform = sys.platform
 
     if platform == "win32":
-        vbs_path = _windows_startup_dir() / f"{TASK_NAME}.vbs"
-        vbs_path.unlink(missing_ok=True)
+        startup = _windows_startup_dir()
+        (startup / f"{WINDOWS_DISPLAY_NAME}.lnk").unlink(missing_ok=True)
+        (startup / _LEGACY_VBS_NAME).unlink(missing_ok=True)
         print("Removed startup entry.")
     elif platform == "darwin":
         plist_path = Path.home() / "Library" / "LaunchAgents" / f"{MACOS_LABEL}.plist"
@@ -187,8 +202,11 @@ def status() -> None:
     platform = sys.platform
 
     if platform == "win32":
-        vbs_path = _windows_startup_dir() / f"{TASK_NAME}.vbs"
-        print("installed" if vbs_path.exists() else "not installed")
+        startup = _windows_startup_dir()
+        installed = (startup / f"{WINDOWS_DISPLAY_NAME}.lnk").exists() or (
+            startup / _LEGACY_VBS_NAME
+        ).exists()
+        print("installed" if installed else "not installed")
     elif platform == "darwin":
         plist_path = Path.home() / "Library" / "LaunchAgents" / f"{MACOS_LABEL}.plist"
         print("installed" if plist_path.exists() else "not installed")

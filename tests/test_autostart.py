@@ -8,12 +8,17 @@ Windows pythonw swap are pure and tested here. The actual schtasks / launchctl
 from idle_player import autostart
 
 
-def test_windows_vbs_sets_workdir_and_runs_module_hidden():
-    vbs = autostart._windows_vbs(r"C:\repo\.venv\Scripts\pythonw.exe", r"C:\repo")
-    assert 'sh.CurrentDirectory = "C:\\repo"' in vbs
-    assert r"C:\repo\.venv\Scripts\pythonw.exe" in vbs
-    assert "-m idle_player" in vbs
-    assert ", 0, False" in vbs  # hidden window, non-blocking
+def test_windows_shortcut_script_sets_target_args_and_workdir():
+    script = autostart._windows_shortcut_script(
+        r"C:\startup\Spotify Perpetual.lnk",
+        r"C:\repo\.venv\Scripts\pythonw.exe",
+        r"C:\repo",
+    )
+    assert r"C:\startup\Spotify Perpetual.lnk" in script
+    assert r"C:\repo\.venv\Scripts\pythonw.exe" in script  # TargetPath
+    assert "-m idle_player" in script  # Arguments
+    assert r"C:\repo" in script  # WorkingDirectory
+    assert "CreateShortcut" in script
 
 
 def test_macos_plist_has_paths_trigger_and_module():
