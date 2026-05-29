@@ -1,49 +1,82 @@
 # spotify-perpetual
 
-Keeps Spotify playing. Polls playback state on an interval; if nothing is
-playing (or no active Connect device exists), launches Spotify if needed and
-starts a configured playlist.
+Never let the music stop. **spotify-perpetual** watches your Spotify playback
+and automatically resumes a playlist whenever nothing is playing — launching
+the Spotify app first if it isn't running. Set it up once, add it to startup,
+and your speakers are never silent again.
 
-## Status
+## Features
 
-MVP scaffold. See [MVP.md](MVP.md) for scope.
+- **Idle detection** — polls playback on a configurable interval (default ~30s).
+- **Auto-resume** — starts your chosen playlist the moment playback stops or no
+  device is active.
+- **App launch fallback** — if Spotify isn't running, launches it, waits for it
+  to come online as a Connect device, then starts playback.
+- **Cross-platform** — Windows, macOS, and Linux process detection and launch.
+- **Set-and-forget** — runs headless after a one-time login; resilient to
+  transient network/API errors.
+- **Configurable** — playlist, interval, and whether a paused track counts as
+  "still listening" are all settings, not hardcoded.
 
-## How it works
+## Requirements
 
-- Poll `current_playback()` every `POLL_INTERVAL` seconds (default ~30s).
-- Something playing → do nothing.
-- Nothing playing / no active device → ensure Spotify running, then start the
-  configured playlist.
+- Python 3.9+
+- A Spotify account and a free [Spotify developer app](https://developer.spotify.com/dashboard)
+  (for the client ID/secret)
+- The Spotify desktop app installed on the machine that plays audio
 
-## Setup
+## Installation
 
-1. Create a Spotify app at https://developer.spotify.com/dashboard and note the
-   client ID, client secret, and a redirect URI.
-2. Copy `.env.example` to `.env` and fill in the values. **Never commit `.env`.**
-3. Install deps:
+```bash
+git clone https://github.com/Flarze/spotify-perpetual.git
+cd spotify-perpetual
+pip install -r requirements.txt
+```
+
+## Configuration
+
+1. Create an app in the [Spotify developer dashboard](https://developer.spotify.com/dashboard)
+   and add a redirect URI (e.g. `http://localhost:8888/callback`).
+2. Copy the template and fill in your values:
+
+   ```bash
+   cp .env.example .env
    ```
-   pip install -r requirements.txt
-   ```
-4. **First run is not headless** — OAuth opens a browser once to authorize.
-   Run it manually the first time:
-   ```
-   python -m idle_player
-   ```
-   After that the refresh token is cached and runs can be headless/autostarted.
 
-## ⚠️ Secrets
+   | Setting | Description |
+   |---------|-------------|
+   | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | From your developer app |
+   | `SPOTIFY_REDIRECT_URI` | Must match the dashboard exactly |
+   | `PLAYLIST_URI` | Playlist to resume, e.g. `spotify:playlist:...` |
+   | `POLL_INTERVAL` | Seconds between checks (default `30`) |
+   | `PAUSED_COUNTS_AS_PLAYING` | If `true`, a paused track is treated as "listening" and won't trigger a restart |
 
-The OAuth **token cache file is a secret** — it grants access to your account.
-It is excluded by `.gitignore`. Do not commit it. People leak these constantly.
+## Usage
 
-## Autostart
+The first run opens a browser once to authorize your account:
 
-Autostart is per-OS. See `scripts/`:
+```bash
+python -m idle_player
+```
 
-- Windows → Task Scheduler ("At log on", running `pythonw -m idle_player`)
-- macOS → launchd plist
-- Linux → systemd user unit
+After that, the access token is cached and every later run is headless — no
+browser needed. Leave it running and it keeps your playlist alive.
+
+## Running at startup
+
+Autostart is configured per operating system. Step-by-step guides and templates
+live in [`scripts/`](scripts/):
+
+- **Windows** — [Task Scheduler](scripts/windows_task_scheduler.md) ("At log on", via `pythonw`)
+- **macOS** — [launchd agent](scripts/macos_launchd.md)
+- **Linux** — [systemd user service](scripts/linux_systemd.md)
+
+## Security
+
+The OAuth token cache grants access to your Spotify account — **treat it as a
+secret.** It and your `.env` are excluded by `.gitignore` and should never be
+committed or shared.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE).
