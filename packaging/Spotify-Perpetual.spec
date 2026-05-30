@@ -9,8 +9,8 @@
 block_cipher = None
 
 a = Analysis(
-    ['packaging/entry.py'],
-    pathex=['src'],
+    ['entry.py'],
+    pathex=['../src'],
     binaries=[],
     datas=[],
     # PyInstaller misses these without help: the pystray Windows backend and the
@@ -51,6 +51,6 @@ exe = EXE(
     runtime_tmpdir=None,
     console=False,                       # windowed: no console window
     disable_windowed_traceback=False,
-    version='packaging/version_info.txt',  # branded file properties
+    version='version_info.txt',  # branded file properties (beside this spec)
     icon=None,                           # set to 'packaging/icon.ico' if you add one
 )
