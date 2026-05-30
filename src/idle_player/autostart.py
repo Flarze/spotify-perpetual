@@ -39,7 +39,14 @@ def _pythonw(python_exe: str) -> str:
     return python_exe
 
 
-def _windows_shortcut_script(lnk_path: str, python_exe: str, workdir: str) -> str:
+def _module_args(tray: bool) -> str:
+    """Command-line args for the launcher: the tray UI or the plain loop."""
+    return "-m idle_player tray" if tray else "-m idle_player"
+
+
+def _windows_shortcut_script(
+    lnk_path: str, python_exe: str, workdir: str, tray: bool = False
+) -> str:
     """PowerShell that creates a Startup shortcut launching idle_player.
 
     The shortcut targets pythonw.exe directly (no console window, no wscript
@@ -51,7 +58,7 @@ def _windows_shortcut_script(lnk_path: str, python_exe: str, workdir: str) -> st
         "$s = (New-Object -ComObject WScript.Shell)."
         f"CreateShortcut('{lnk_path}'); "
         f"$s.TargetPath = '{python_exe}'; "
-        "$s.Arguments = '-m idle_player'; "
+        f"$s.Arguments = '{_module_args(tray)}'; "
         f"$s.WorkingDirectory = '{workdir}'; "
         "$s.WindowStyle = 7; "
         f"$s.Description = '{WINDOWS_DISPLAY_NAME}'; "
@@ -66,7 +73,8 @@ def _windows_startup_dir() -> Path:
     )
 
 
-def _macos_plist(python_exe: str, workdir: str, label: str) -> str:
+def _macos_plist(python_exe: str, workdir: str, label: str, tray: bool = False) -> str:
+    tray_arg = "        <string>tray</string>\n" if tray else ""
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
@@ -80,6 +88,7 @@ def _macos_plist(python_exe: str, workdir: str, label: str) -> str:
         f"        <string>{python_exe}</string>\n"
         "        <string>-m</string>\n"
         "        <string>idle_player</string>\n"
+        f"{tray_arg}"
         "    </array>\n"
         "    <key>WorkingDirectory</key>\n"
         f"    <string>{workdir}</string>\n"
@@ -97,7 +106,7 @@ def _macos_plist(python_exe: str, workdir: str, label: str) -> str:
     )
 
 
-def _linux_unit(python_exe: str, workdir: str) -> str:
+def _linux_unit(python_exe: str, workdir: str, tray: bool = False) -> str:
     return (
         "[Unit]\n"
         "Description=spotify-perpetual: keep Spotify playing when idle\n"
@@ -108,7 +117,7 @@ def _linux_unit(python_exe: str, workdir: str) -> str:
         "Type=simple\n"
         f"WorkingDirectory={workdir}\n"
         f"Environment=PYTHONPATH={workdir}/src\n"
-        f"ExecStart={python_exe} -m idle_player\n"
+        f"ExecStart={python_exe} {_module_args(tray)}\n"
         "Restart=on-failure\n"
         "RestartSec=10\n"
         "\n"
@@ -140,7 +149,18 @@ def _run(cmd) -> None:
 # --- install / uninstall / status ----------------------------------------
 
 
-def install() -> None:
+def _warn_if_no_pystray() -> None:
+    """Tray autostart needs the optional [tray] extra; warn if it is missing."""
+    try:
+        import pystray  # noqa: F401
+    except ImportError:
+        print(
+            "Warning: tray autostart needs pystray. Install it with "
+            "`pip install -e .[tray]` or the entry will fail to start."
+        )
+
+
+def install(tray: bool = False) -> None:
     workdir = str(Path.cwd())
     python_exe = _pythonw(sys.executable)
     platform = sys.platform
@@ -150,25 +170,28 @@ def install() -> None:
         startup.mkdir(parents=True, exist_ok=True)
         (startup / _LEGACY_VBS_NAME).unlink(missing_ok=True)  # remove old .vbs entry
         lnk_path = startup / f"{WINDOWS_DISPLAY_NAME}.lnk"
-        script = _windows_shortcut_script(str(lnk_path), python_exe, workdir)
+        script = _windows_shortcut_script(str(lnk_path), python_exe, workdir, tray)
         _run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script])
         print(f"Installed startup shortcut at {lnk_path}.")
     elif platform == "darwin":
         plist_path = Path.home() / "Library" / "LaunchAgents" / f"{MACOS_LABEL}.plist"
         plist_path.parent.mkdir(parents=True, exist_ok=True)
-        plist_path.write_text(_macos_plist(python_exe, workdir, MACOS_LABEL))
+        plist_path.write_text(_macos_plist(python_exe, workdir, MACOS_LABEL, tray))
         _run(["launchctl", "load", str(plist_path)])
         print(f"Installed LaunchAgent at {plist_path}.")
     elif platform.startswith("linux"):
         unit_path = Path.home() / ".config" / "systemd" / "user" / f"{TASK_NAME}.service"
         unit_path.parent.mkdir(parents=True, exist_ok=True)
-        unit_path.write_text(_linux_unit(python_exe, workdir))
+        unit_path.write_text(_linux_unit(python_exe, workdir, tray))
         _run(["systemctl", "--user", "daemon-reload"])
         _run(["systemctl", "--user", "enable", "--now", f"{TASK_NAME}.service"])
         print(f"Installed and started systemd user service at {unit_path}.")
     else:
         raise SystemExit(f"Unsupported platform for autostart: {platform}")
 
+    print("Autostart will launch the tray UI." if tray else "Autostart will launch the watcher.")
+    if tray:
+        _warn_if_no_pystray()
     _warn_if_no_token()
 
 

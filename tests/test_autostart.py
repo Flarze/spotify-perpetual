@@ -39,6 +39,30 @@ def test_linux_unit_has_execstart_workdir_and_target():
     assert "WantedBy=default.target" in unit
 
 
+def test_module_args_tray_vs_plain():
+    assert autostart._module_args(False) == "-m idle_player"
+    assert autostart._module_args(True) == "-m idle_player tray"
+
+
+def test_windows_shortcut_tray_arguments():
+    plain = autostart._windows_shortcut_script(r"C:\x.lnk", r"C:\py.exe", r"C:\repo")
+    tray = autostart._windows_shortcut_script(r"C:\x.lnk", r"C:\py.exe", r"C:\repo", tray=True)
+    assert "'-m idle_player'" in plain
+    assert "'-m idle_player tray'" in tray
+
+
+def test_linux_unit_tray_execstart():
+    unit = autostart._linux_unit("/repo/.venv/bin/python", "/repo", tray=True)
+    assert "ExecStart=/repo/.venv/bin/python -m idle_player tray" in unit
+
+
+def test_macos_plist_tray_adds_arg():
+    plain = autostart._macos_plist("/py", "/repo", "lbl")
+    tray = autostart._macos_plist("/py", "/repo", "lbl", tray=True)
+    assert "<string>tray</string>" not in plain
+    assert "<string>tray</string>" in tray
+
+
 def test_pythonw_swaps_when_sibling_exists(tmp_path):
     (tmp_path / "python.exe").write_text("")
     (tmp_path / "pythonw.exe").write_text("")

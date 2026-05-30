@@ -44,7 +44,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     )
     sub.add_parser("tray", help="run the watcher with a system-tray icon")
     sub.add_parser("doctor", help="run diagnostics and print a pass/fail report")
-    sub.add_parser("install", help="create an OS autostart entry")
+    install_p = sub.add_parser("install", help="create an OS autostart entry")
+    install_p.add_argument(
+        "--tray",
+        action="store_true",
+        help="autostart the system-tray UI instead of the headless loop",
+    )
     sub.add_parser("uninstall", help="remove the OS autostart entry")
     sub.add_parser("status", help="report whether autostart is installed")
     args = parser.parse_args(argv)
@@ -67,7 +72,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         finally:
             single_instance.release(lock_path)
     elif args.command == "install":
-        autostart.install()
+        autostart.install(tray=args.tray)
     elif args.command == "uninstall":
         autostart.uninstall()
     elif args.command == "status":

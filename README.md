@@ -152,9 +152,10 @@ From the repo root, in the same environment where you installed the package,
 run the built-in installer:
 
 ```bash
-idle-player install      # create the autostart entry for your OS
-idle-player status       # check whether it is installed
-idle-player uninstall    # remove it
+idle-player install          # autostart the headless watcher
+idle-player install --tray   # autostart the system-tray UI instead
+idle-player status           # check whether it is installed
+idle-player uninstall        # remove it
 ```
 
 This creates the right entry for your platform automatically: a Startup-folder

@@ -86,15 +86,16 @@ def test_main_exits_if_another_instance_running(monkeypatch):
 
 def test_main_dispatches_subcommands(monkeypatch):
     calls = []
-    monkeypatch.setattr(entry.autostart, "install", lambda: calls.append("install"))
+    monkeypatch.setattr(entry.autostart, "install", lambda tray=False: calls.append(("install", tray)))
     monkeypatch.setattr(entry.autostart, "uninstall", lambda: calls.append("uninstall"))
     monkeypatch.setattr(entry.autostart, "status", lambda: calls.append("status"))
 
     entry.main(["install"])
+    entry.main(["install", "--tray"])
     entry.main(["uninstall"])
     entry.main(["status"])
 
-    assert calls == ["install", "uninstall", "status"]
+    assert calls == [("install", False), ("install", True), "uninstall", "status"]
 
 
 def test_main_dispatches_doctor(monkeypatch):
