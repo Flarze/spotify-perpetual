@@ -30,6 +30,8 @@ class Config:
     paused_counts_as_playing: bool = True
     preferred_device_name: str = ""
     launch_wait_seconds: int = 8
+    backoff_factor: int = 2
+    backoff_max_seconds: int = 600
     log_level: str = "INFO"
     log_file: str = "logs/idle_player.log"
     log_max_bytes: int = 1048576
@@ -137,6 +139,8 @@ def load_config(
         ),
         preferred_device_name=values.get("preferred_device_name", defaults.preferred_device_name),
         launch_wait_seconds=_to_int(values.get("launch_wait_seconds"), defaults.launch_wait_seconds),
+        backoff_factor=_to_int(values.get("backoff_factor"), defaults.backoff_factor),
+        backoff_max_seconds=_to_int(values.get("backoff_max_seconds"), defaults.backoff_max_seconds),
         log_level=values.get("log_level", defaults.log_level),
         log_file=values.get("log_file", defaults.log_file),
         log_max_bytes=_to_int(values.get("log_max_bytes"), defaults.log_max_bytes),
@@ -155,6 +159,12 @@ def _merge_yaml(values: dict, data: dict) -> None:
         values["preferred_device_name"] = device["preferred_name"]
     if "launch_wait_seconds" in device:
         values["launch_wait_seconds"] = device["launch_wait_seconds"]
+
+    backoff = data.get("backoff") or {}
+    if "factor" in backoff:
+        values["backoff_factor"] = backoff["factor"]
+    if "max_seconds" in backoff:
+        values["backoff_max_seconds"] = backoff["max_seconds"]
 
     logging_cfg = data.get("logging") or {}
     if "level" in logging_cfg:

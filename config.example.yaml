@@ -10,6 +10,12 @@ device:
   preferred_name: ""         # optional: prefer this Connect device by name
   launch_wait_seconds: 8     # wait after launching Spotify before retry
 
+# On repeated API/network failures, wait longer between retries instead of
+# hammering every poll_interval. Resets to normal cadence on recovery.
+backoff:
+  factor: 2                  # each consecutive failure multiplies the delay
+  max_seconds: 600          # cap the backoff delay
+
 logging:
   level: INFO
   file: logs/idle_player.log

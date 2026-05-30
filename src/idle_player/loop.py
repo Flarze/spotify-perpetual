@@ -79,24 +79,49 @@ def run_once(config: Config, sp, logger: logging.Logger) -> str:
     return "no_device"
 
 
+def _backoff_delay(config: Config, failures: int) -> int:
+    """Seconds to wait before the next cycle given consecutive failure count.
+
+    ``failures == 0`` (last cycle succeeded) → normal ``poll_interval``. Each
+    further consecutive failure multiplies the delay by ``backoff_factor``,
+    capped at ``backoff_max_seconds``. So the first failure waits one normal
+    interval, the second ``poll_interval * factor``, and so on, instead of
+    hammering the API every ``poll_interval``.
+    """
+    if failures <= 0:
+        return config.poll_interval
+    delay = config.poll_interval * (config.backoff_factor ** (failures - 1))
+    return min(delay, config.backoff_max_seconds)
+
+
 def run(config: Config, sp) -> None:
     """Poll forever: each interval, run one cycle. Resilient to transient errors.
 
-    Transient API/network errors are logged and the loop continues. Ctrl-C
-    (KeyboardInterrupt) exits cleanly.
+    Transient API/network errors are logged and the loop continues, backing off
+    exponentially on repeated failures and resuming normal cadence on recovery.
+    Ctrl-C (KeyboardInterrupt) exits cleanly.
     """
     logger = setup_logging(config)
     logger.info("idle_player started; polling every %ss", config.poll_interval)
+    failures = 0
     while True:
         try:
             run_once(config, sp, logger)
+            failures = 0  # recovered: drop back to normal cadence
         except KeyboardInterrupt:
             logger.info("interrupted; shutting down")
             break
         except Exception:  # noqa: BLE001 - keep the daemon alive on transient errors
+            failures += 1
             logger.exception("transient error; continuing")
+
+        delay = _backoff_delay(config, failures)
+        if failures:
+            logger.warning(
+                "backing off %ss after %d consecutive failure(s)", delay, failures
+            )
         try:
-            time.sleep(config.poll_interval)
+            time.sleep(delay)
         except KeyboardInterrupt:
             logger.info("interrupted; shutting down")
             break

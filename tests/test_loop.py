@@ -137,3 +137,29 @@ def test_run_once_no_device_after_retry(tmp_path, monkeypatch):
 
     assert result == "no_device"
     assert len(sp.start_calls) == 2
+
+
+# --- _backoff_delay -------------------------------------------------------
+
+
+def test_backoff_delay_normal_cadence_when_no_failures(tmp_path):
+    config = make_config(tmp_path, poll_interval=30)
+
+    assert loop._backoff_delay(config, 0) == 30
+
+
+def test_backoff_delay_grows_exponentially(tmp_path):
+    config = make_config(tmp_path, poll_interval=30, backoff_factor=2, backoff_max_seconds=10000)
+
+    # First failure waits one normal interval, then doubles each time.
+    assert loop._backoff_delay(config, 1) == 30
+    assert loop._backoff_delay(config, 2) == 60
+    assert loop._backoff_delay(config, 3) == 120
+    assert loop._backoff_delay(config, 4) == 240
+
+
+def test_backoff_delay_caps_at_max(tmp_path):
+    config = make_config(tmp_path, poll_interval=30, backoff_factor=2, backoff_max_seconds=200)
+
+    assert loop._backoff_delay(config, 5) == 200  # 30*2^4 = 480, capped to 200
+    assert loop._backoff_delay(config, 99) == 200
