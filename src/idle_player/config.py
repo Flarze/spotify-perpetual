@@ -32,6 +32,7 @@ class Config:
     poll_interval: int = 30
     token_cache_path: str = ".cache"
     paused_counts_as_playing: bool = True
+    resume_paused_track: bool = False
     preferred_device_name: str = ""
     launch_wait_seconds: int = 8
     backoff_factor: int = 2
@@ -158,6 +159,7 @@ def load_config(
         "poll_interval": env.get("POLL_INTERVAL"),
         "token_cache_path": env.get("TOKEN_CACHE_PATH"),
         "paused_counts_as_playing": env.get("PAUSED_COUNTS_AS_PLAYING"),
+        "resume_paused_track": env.get("RESUME_PAUSED_TRACK"),
     }
 
     if yaml_path is not None and Path(yaml_path).exists():
@@ -219,6 +221,11 @@ def load_config(
             if values.get("paused_counts_as_playing") is not None
             else defaults.paused_counts_as_playing
         ),
+        resume_paused_track=(
+            _to_bool(values["resume_paused_track"])
+            if values.get("resume_paused_track") is not None
+            else defaults.resume_paused_track
+        ),
         preferred_device_name=values.get("preferred_device_name", defaults.preferred_device_name),
         launch_wait_seconds=_to_int(values.get("launch_wait_seconds"), defaults.launch_wait_seconds),
         backoff_factor=_to_int(values.get("backoff_factor"), defaults.backoff_factor),
@@ -252,6 +259,7 @@ def _merge_yaml(values: dict, data: dict) -> None:
         "repeat",
         "poll_interval",
         "paused_counts_as_playing",
+        "resume_paused_track",
         "token_cache_path",
     ):
         if key in data:

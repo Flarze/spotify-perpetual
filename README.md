@@ -55,6 +55,7 @@ virtualenv if you prefer to keep things isolated.)
    | `PLAYLISTS` | Playlist(s) to resume — one, or several separated by commas, e.g. `spotify:playlist:aaaa,spotify:playlist:bbbb` |
    | `POLL_INTERVAL` | Seconds between checks (default `30`) |
    | `PAUSED_COUNTS_AS_PLAYING` | If `true`, a paused track is treated as "listening" and won't trigger a restart |
+   | `RESUME_PAUSED_TRACK` | If `true` (and `PAUSED_COUNTS_AS_PLAYING=false`), resume the paused track instead of starting a fresh playlist. Default `false` |
 
 ### Multiple playlists, shuffle, and repeat
 

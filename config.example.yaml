@@ -27,7 +27,13 @@ poll_interval: 30            # seconds between playback checks
 token_cache_path: .cache     # where the OAuth token cache is stored (SECRET)
 
 # Treat paused-but-loaded as "listening" (don't restart playback).
+# false = pausing also triggers the app.
 paused_counts_as_playing: true
+
+# When the app acts on a paused track (paused_counts_as_playing: false), resume
+# that same track instead of starting a fresh playlist. No effect when
+# paused_counts_as_playing is true.
+resume_paused_track: false
 
 device:
   preferred_name: ""         # optional: prefer this Connect device by name

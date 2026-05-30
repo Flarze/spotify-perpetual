@@ -150,6 +150,56 @@ def test_run_once_404_retry_keeps_same_playlist(tmp_path, monkeypatch):
     assert [c["context_uri"] for c in sp.start_calls] == ["a", "a"]
 
 
+def test_run_once_resumes_paused_track_when_enabled(tmp_path, monkeypatch):
+    from idle_player.player import PlaylistRotator
+
+    stub_ensure_running(monkeypatch)
+    rotator = PlaylistRotator(["spotify:playlist:a", "spotify:playlist:b"], "rotate")
+    sp = FakeSpotify(
+        playback={"is_playing": False, "item": {"uri": "track:x"}},
+        devices=[{"id": "d1", "name": "L", "is_active": True}],
+    )
+    config = make_config(tmp_path, paused_counts_as_playing=False, resume_paused_track=True)
+
+    result = loop.run_once(config, sp, logging.getLogger("test"), rotator)
+
+    assert result == "resumed"
+    # Resume = start_playback with no context_uri; rotation untouched.
+    assert sp.start_calls == [{"context_uri": None, "device_id": "d1"}]
+    assert rotator.next() == "spotify:playlist:a"  # not advanced by the resume
+
+
+def test_run_once_starts_playlist_when_resume_disabled(tmp_path, monkeypatch):
+    stub_ensure_running(monkeypatch)
+    sp = FakeSpotify(
+        playback={"is_playing": False, "item": {"uri": "track:x"}},
+        devices=[{"id": "d1", "name": "L", "is_active": True}],
+    )
+    config = make_config(tmp_path, paused_counts_as_playing=False, resume_paused_track=False)
+
+    result = loop.run_once(config, sp, logging.getLogger("test"))
+
+    assert result == "started"
+    assert sp.start_calls[0]["context_uri"] == config.playlists()[0]
+
+
+def test_run_once_resume_falls_back_to_playlist_on_404(tmp_path, monkeypatch):
+    stub_ensure_running(monkeypatch)
+    err404 = SpotifyException(404, -1, "no device", reason="NO_ACTIVE_DEVICE")
+    sp = FakeSpotify(
+        playback={"is_playing": False, "item": {"uri": "track:x"}},
+        devices=[{"id": "d1", "name": "L", "is_active": True}],
+        start_errors=[err404, None],  # resume attempt 404s, playlist start works
+    )
+    config = make_config(tmp_path, paused_counts_as_playing=False, resume_paused_track=True)
+
+    result = loop.run_once(config, sp, logging.getLogger("test"))
+
+    assert result == "started"
+    assert sp.start_calls[0]["context_uri"] is None  # resume tried first
+    assert sp.start_calls[1]["context_uri"] == config.playlists()[0]  # then playlist
+
+
 def test_run_once_relaunches_and_retries_on_404(tmp_path, monkeypatch):
     calls = stub_ensure_running(monkeypatch)
     err404 = SpotifyException(404, -1, "no device", reason="NO_ACTIVE_DEVICE")

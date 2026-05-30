@@ -85,6 +85,15 @@ def should_start_playback(
     return not paused_counts_as_playing
 
 
+def is_paused_with_track(playback: Optional[dict]) -> bool:
+    """True if a track is loaded but paused (vs. truly idle / no device)."""
+    return (
+        playback is not None
+        and not playback.get("is_playing")
+        and playback.get("item") is not None
+    )
+
+
 def get_playback(sp) -> Optional[dict]:
     """Return the current_playback() response, or None when nothing is active."""
     return sp.current_playback()
@@ -149,6 +158,27 @@ def start_playlist(
 
     _apply_modes(sp, device_id, shuffle, repeat)
     return True
+
+
+def resume_playback(sp, device_id: Optional[str] = None) -> bool:
+    """Resume the current (paused) track without changing the context.
+
+    Returns True on success. A "no active device" 404 returns False so the
+    caller can fall back to starting a playlist. A Premium-required 403 raises
+    PremiumRequiredError. Any other error propagates.
+    """
+    try:
+        sp.start_playback(device_id=device_id)
+        return True
+    except SpotifyException as exc:
+        if exc.http_status == 404:
+            return False
+        if exc.http_status == 403 and _is_premium_required(exc):
+            raise PremiumRequiredError(
+                "Spotify playback control requires Premium; this account cannot "
+                "be controlled remotely. Free accounts are not supported."
+            ) from exc
+        raise
 
 
 def _apply_modes(sp, device_id, shuffle: bool, repeat: str) -> None:

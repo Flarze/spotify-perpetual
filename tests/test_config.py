@@ -204,6 +204,16 @@ def test_yaml_overrides_backoff(tmp_path):
     assert config.backoff_max_seconds == 120
 
 
+def test_resume_paused_track_defaults_false(tmp_path):
+    config = load_config(env_path=write_env(tmp_path / ".env"))
+    assert config.resume_paused_track is False
+
+
+def test_resume_paused_track_from_env(tmp_path):
+    env = write_env(tmp_path / ".env", RESUME_PAUSED_TRACK="true")
+    assert load_config(env_path=env).resume_paused_track is True
+
+
 def test_single_playlist_back_compat(tmp_path):
     env = write_env(tmp_path / ".env", PLAYLIST_URI="spotify:playlist:abc")
     config = load_config(env_path=env)

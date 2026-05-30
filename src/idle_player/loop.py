@@ -20,7 +20,9 @@ from .player import (
     PlaylistRotator,
     PremiumRequiredError,
     get_playback,
+    is_paused_with_track,
     pick_device,
+    resume_playback,
     should_start_playback,
     start_playlist,
 )
@@ -114,8 +116,9 @@ def setup_logging(config: Config) -> logging.Logger:
 def run_once(config: Config, sp, logger: logging.Logger, rotator=None) -> str:
     """Run one decide-and-act cycle. Returns the action taken.
 
-    Returns one of: "skip" (already playing), "started", or "no_device" (still
-    no active device after launching and retrying once).
+    Returns one of: "skip" (already playing), "resumed" (continued a paused
+    track), "started", or "no_device" (still no active device after launching
+    and retrying once).
 
     ``rotator`` chooses which playlist to start; without one the first
     configured playlist is used. The playlist is chosen once per cycle so the
@@ -126,6 +129,16 @@ def run_once(config: Config, sp, logger: logging.Logger, rotator=None) -> str:
     if not should_start_playback(playback, config.paused_counts_as_playing):
         logger.info("playback active, nothing to do")
         return "skip"
+
+    # If configured, resume a paused track in place rather than starting a fresh
+    # playlist. Rotation is untouched here — it only advances on a real start.
+    if config.resume_paused_track and is_paused_with_track(playback):
+        ensure_running(config.launch_wait_seconds)
+        device_id = pick_device(sp, config.preferred_device_name)
+        if resume_playback(sp, device_id):
+            logger.info("resumed paused track on device %s", device_id)
+            return "resumed"
+        logger.info("could not resume paused track; falling back to playlist")
 
     playlist_uri = rotator.next() if rotator is not None else config.playlists()[0]
 

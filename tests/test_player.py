@@ -12,7 +12,9 @@ from idle_player.player import (
     PlaylistRotator,
     PremiumRequiredError,
     get_playback,
+    is_paused_with_track,
     pick_device,
+    resume_playback,
     should_start_playback,
     start_playlist,
 )
@@ -74,6 +76,38 @@ def test_idle_active_device_no_item_starts_regardless_of_flag():
     playback = {"is_playing": False, "item": None}
     assert should_start_playback(playback, paused_counts_as_playing=True) is True
     assert should_start_playback(playback, paused_counts_as_playing=False) is True
+
+
+# --- is_paused_with_track -------------------------------------------------
+
+
+def test_is_paused_with_track():
+    assert is_paused_with_track({"is_playing": False, "item": {"uri": "x"}}) is True
+    assert is_paused_with_track({"is_playing": True, "item": {"uri": "x"}}) is False
+    assert is_paused_with_track({"is_playing": False, "item": None}) is False
+    assert is_paused_with_track(None) is False
+
+
+# --- resume_playback ------------------------------------------------------
+
+
+def test_resume_playback_resumes_without_context():
+    sp = FakeSpotify()
+    assert resume_playback(sp, device_id="d1") is True
+    assert sp.start_calls == [{"context_uri": None, "device_id": "d1"}]
+
+
+def test_resume_playback_404_returns_false():
+    err = SpotifyException(404, -1, "No active device", reason="NO_ACTIVE_DEVICE")
+    sp = FakeSpotify(start_error=err)
+    assert resume_playback(sp) is False
+
+
+def test_resume_playback_premium_403_raises():
+    err = SpotifyException(403, -1, "Player command failed", reason="PREMIUM_REQUIRED")
+    sp = FakeSpotify(start_error=err)
+    with pytest.raises(PremiumRequiredError):
+        resume_playback(sp)
 
 
 # --- get_playback ---------------------------------------------------------
