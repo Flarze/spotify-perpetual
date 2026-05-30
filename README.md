@@ -73,6 +73,15 @@ URIs or `open.spotify.com` links both work. With several playlists, `rotate`
 advances to the next one each time playback resumes; `random` picks one each
 time.
 
+### Changing settings while it runs
+
+Edits are picked up live — no restart. Save your `.env` or `config.yaml` and
+within one `poll_interval` the daemon reloads and applies the new playback
+settings (playlists, selection, shuffle, repeat, interval), logging
+`config reloaded ...`. A broken edit is logged and the previous config is kept,
+so the daemon stays up. Changing credentials triggers a Spotify client rebuild
+automatically.
+
 ## Usage
 
 The first run opens a browser once to authorize your account:

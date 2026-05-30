@@ -8,12 +8,14 @@ rotating file so autostart/headless runs are debuggable.
 from __future__ import annotations
 
 import logging
+import os
 import socket
 import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from .config import Config
+from .auth import build_client
+from .config import Config, load_config
 from .player import (
     PlaylistRotator,
     PremiumRequiredError,
@@ -25,6 +27,14 @@ from .player import (
 from .spotify_process import ensure_running
 
 LOGGER_NAME = "idle_player"
+
+# Config files watched for live edits (relative to the working directory, the
+# same place load_config reads them from).
+WATCH_FILES = (".env", "config.yaml")
+
+# Fields whose change requires rebuilding the Spotify client, not just swapping
+# the config in place.
+_AUTH_FIELDS = ("client_id", "client_secret", "redirect_uri", "token_cache_path")
 
 # Host probed to decide whether the network is up at boot.
 PROBE_HOST = "api.spotify.com"
@@ -158,12 +168,52 @@ def _backoff_delay(config: Config, failures: int) -> int:
     return min(delay, config.backoff_max_seconds)
 
 
+def _watch_mtimes(paths=WATCH_FILES) -> dict:
+    """Snapshot the modification times of the watched config files."""
+    return {p: (os.path.getmtime(p) if os.path.exists(p) else None) for p in paths}
+
+
+def maybe_reload(config, sp, rotator, mtimes, logger, load=load_config, build=build_client):
+    """Reload config if a watched file changed since ``mtimes``.
+
+    Returns ``(config, sp, rotator, mtimes, reloaded)``. On an unchanged config
+    the inputs pass through. On a changed-but-invalid config the previous one is
+    kept (the edit is logged, the daemon stays up). Credential changes rebuild
+    the Spotify client; everything else is applied by swapping the config and
+    rebuilding the playlist rotator.
+    """
+    current = _watch_mtimes()
+    if current == mtimes:
+        return config, sp, rotator, mtimes, False
+
+    try:
+        new_config = load()
+    except Exception as exc:  # noqa: BLE001 - a bad edit must not kill the daemon
+        logger.error("config changed but reload failed (%s); keeping previous", exc)
+        return config, sp, rotator, current, False
+
+    if any(getattr(config, f) != getattr(new_config, f) for f in _AUTH_FIELDS):
+        sp = build(new_config)
+        logger.info("config reloaded (credentials changed; rebuilt Spotify client)")
+    else:
+        logger.info(
+            "config reloaded: %d playlist(s), selection=%s, shuffle=%s, repeat=%s",
+            len(new_config.playlists()),
+            new_config.playlist_selection,
+            new_config.shuffle,
+            new_config.repeat,
+        )
+    rotator = PlaylistRotator(new_config.playlists(), new_config.playlist_selection)
+    return new_config, sp, rotator, current, True
+
+
 def run(config: Config, sp) -> None:
     """Poll forever: each interval, run one cycle. Resilient to transient errors.
 
     Transient API/network errors are logged and the loop continues, backing off
     exponentially on repeated failures and resuming normal cadence on recovery.
-    Ctrl-C (KeyboardInterrupt) exits cleanly.
+    Config files are watched for edits and reloaded live. Ctrl-C
+    (KeyboardInterrupt) exits cleanly.
     """
     logger = setup_logging(config)
     rotator = PlaylistRotator(config.playlists(), config.playlist_selection)
@@ -173,8 +223,12 @@ def run(config: Config, sp) -> None:
         len(config.playlists()),
         config.playlist_selection,
     )
+    mtimes = _watch_mtimes()
     failures = 0
     while True:
+        config, sp, rotator, mtimes, _ = maybe_reload(
+            config, sp, rotator, mtimes, logger
+        )
         try:
             run_once(config, sp, logger, rotator)
             failures = 0  # recovered: drop back to normal cadence

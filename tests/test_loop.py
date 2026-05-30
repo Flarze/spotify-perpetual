@@ -244,6 +244,71 @@ def test_wait_for_network_gives_up_after_budget(tmp_path, monkeypatch):
     assert slept == [5, 5]  # no sleep after the final attempt
 
 
+# --- maybe_reload ---------------------------------------------------------
+
+
+def test_maybe_reload_no_change_is_noop(tmp_path, monkeypatch):
+    config = make_config(tmp_path)
+    monkeypatch.setattr(loop, "_watch_mtimes", lambda: {".env": 1.0})
+    load_called = []
+
+    cfg, sp, rot, mtimes, reloaded = loop.maybe_reload(
+        config, "SP", "ROT", {".env": 1.0}, logging.getLogger("test"),
+        load=lambda: load_called.append(True),
+    )
+
+    assert reloaded is False
+    assert cfg is config and sp == "SP" and rot == "ROT"
+    assert load_called == []  # unchanged files -> no reload
+
+
+def test_maybe_reload_applies_new_config(tmp_path, monkeypatch):
+    old = make_config(tmp_path, playlist_uri="spotify:playlist:old")
+    new = make_config(tmp_path, playlist_uris=["spotify:playlist:a", "spotify:playlist:b"])
+    monkeypatch.setattr(loop, "_watch_mtimes", lambda: {".env": 2.0})
+
+    cfg, sp, rot, mtimes, reloaded = loop.maybe_reload(
+        old, "SP", "ROT", {".env": 1.0}, logging.getLogger("test"),
+        load=lambda: new, build=lambda c: "NEW_SP",
+    )
+
+    assert reloaded is True
+    assert cfg is new
+    assert sp == "SP"  # no auth change -> client reused
+    assert rot.next() == "spotify:playlist:a"  # rotator rebuilt from new config
+    assert mtimes == {".env": 2.0}
+
+
+def test_maybe_reload_rebuilds_client_on_auth_change(tmp_path, monkeypatch):
+    old = make_config(tmp_path, client_id="old")
+    new = make_config(tmp_path, client_id="new")
+    monkeypatch.setattr(loop, "_watch_mtimes", lambda: {".env": 2.0})
+
+    cfg, sp, rot, mtimes, reloaded = loop.maybe_reload(
+        old, "SP", "ROT", {".env": 1.0}, logging.getLogger("test"),
+        load=lambda: new, build=lambda c: "NEW_SP",
+    )
+
+    assert reloaded is True
+    assert sp == "NEW_SP"  # credentials changed -> client rebuilt
+
+
+def test_maybe_reload_keeps_previous_on_bad_edit(tmp_path, monkeypatch):
+    config = make_config(tmp_path)
+    monkeypatch.setattr(loop, "_watch_mtimes", lambda: {".env": 2.0})
+
+    def boom():
+        raise ValueError("bad yaml")
+
+    cfg, sp, rot, mtimes, reloaded = loop.maybe_reload(
+        config, "SP", "ROT", {".env": 1.0}, logging.getLogger("test"), load=boom,
+    )
+
+    assert reloaded is False
+    assert cfg is config  # previous config kept; daemon stays up
+    assert mtimes == {".env": 2.0}  # but mtime advanced so we don't retry endlessly
+
+
 # --- run() premium handling -----------------------------------------------
 
 
