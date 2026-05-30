@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .config import Config
 from .player import (
+    PlaylistRotator,
     PremiumRequiredError,
     get_playback,
     pick_device,
@@ -100,30 +101,42 @@ def setup_logging(config: Config) -> logging.Logger:
     return logger
 
 
-def run_once(config: Config, sp, logger: logging.Logger) -> str:
+def run_once(config: Config, sp, logger: logging.Logger, rotator=None) -> str:
     """Run one decide-and-act cycle. Returns the action taken.
 
     Returns one of: "skip" (already playing), "started", or "no_device" (still
     no active device after launching and retrying once).
+
+    ``rotator`` chooses which playlist to start; without one the first
+    configured playlist is used. The playlist is chosen once per cycle so the
+    404 retry reuses the same selection (rotation advances per start, not per
+    attempt).
     """
     playback = get_playback(sp)
     if not should_start_playback(playback, config.paused_counts_as_playing):
         logger.info("playback active, nothing to do")
         return "skip"
 
+    playlist_uri = rotator.next() if rotator is not None else config.playlists()[0]
+
+    def _start(device_id):
+        return start_playlist(
+            sp, playlist_uri, device_id, shuffle=config.shuffle, repeat=config.repeat
+        )
+
     # Idle: make sure Spotify is up, pick a device, start the playlist.
     ensure_running(config.launch_wait_seconds)
     device_id = pick_device(sp, config.preferred_device_name)
-    if start_playlist(sp, config.playlist_uri, device_id):
-        logger.info("started playlist on device %s", device_id)
+    if _start(device_id):
+        logger.info("started %s on device %s", playlist_uri, device_id)
         return "started"
 
     # "No active device" 404: launch (if needed) and retry once.
     logger.info("no active device; launching Spotify and retrying")
     ensure_running(config.launch_wait_seconds)
     device_id = pick_device(sp, config.preferred_device_name)
-    if start_playlist(sp, config.playlist_uri, device_id):
-        logger.info("started playlist on device %s after relaunch", device_id)
+    if _start(device_id):
+        logger.info("started %s on device %s after relaunch", playlist_uri, device_id)
         return "started"
 
     logger.warning("no active device after retry; will try again next poll")
@@ -153,11 +166,17 @@ def run(config: Config, sp) -> None:
     Ctrl-C (KeyboardInterrupt) exits cleanly.
     """
     logger = setup_logging(config)
-    logger.info("idle_player started; polling every %ss", config.poll_interval)
+    rotator = PlaylistRotator(config.playlists(), config.playlist_selection)
+    logger.info(
+        "idle_player started; polling every %ss, %d playlist(s), selection=%s",
+        config.poll_interval,
+        len(config.playlists()),
+        config.playlist_selection,
+    )
     failures = 0
     while True:
         try:
-            run_once(config, sp, logger)
+            run_once(config, sp, logger, rotator)
             failures = 0  # recovered: drop back to normal cadence
         except KeyboardInterrupt:
             logger.info("interrupted; shutting down")

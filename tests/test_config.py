@@ -156,6 +156,63 @@ def test_yaml_overrides_backoff(tmp_path):
     assert config.backoff_max_seconds == 120
 
 
+def test_single_playlist_back_compat(tmp_path):
+    env = write_env(tmp_path / ".env", PLAYLIST_URI="spotify:playlist:abc")
+    config = load_config(env_path=env)
+    assert config.playlist_uri == "spotify:playlist:abc"
+    assert config.playlists() == ["spotify:playlist:abc"]
+    assert config.shuffle is False
+    assert config.repeat == "off"
+    assert config.playlist_selection == "rotate"
+
+
+def test_yaml_playlist_list_and_modes(tmp_path):
+    env = write_env(tmp_path / ".env")
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text(
+        "playlist_uris:\n"
+        "  - https://open.spotify.com/playlist/aaa?si=x\n"
+        "  - spotify:playlist:bbb\n"
+        "playlist_selection: random\n"
+        "shuffle: true\n"
+        "repeat: context\n"
+    )
+    config = load_config(env_path=env, yaml_path=yaml_path)
+    # URLs normalized; list preserved; single playlist_uri backs first entry.
+    assert config.playlists() == ["spotify:playlist:aaa", "spotify:playlist:bbb"]
+    assert config.playlist_uri == "spotify:playlist:aaa"
+    assert config.playlist_selection == "random"
+    assert config.shuffle is True
+    assert config.repeat == "context"
+
+
+def test_yaml_playlist_list_satisfies_required_without_single(tmp_path):
+    # A yaml list alone is enough; no PLAYLIST_URI needed.
+    env = write_env(tmp_path / ".env", PLAYLIST_URI=None)
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text("playlist_uris:\n  - spotify:playlist:only\n")
+    config = load_config(env_path=env, yaml_path=yaml_path)
+    assert config.playlists() == ["spotify:playlist:only"]
+
+
+def test_invalid_repeat_raises(tmp_path):
+    env = write_env(tmp_path / ".env")
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text("repeat: loop\n")
+    with pytest.raises(ValueError) as exc:
+        load_config(env_path=env, yaml_path=yaml_path)
+    assert "repeat" in str(exc.value)
+
+
+def test_invalid_selection_raises(tmp_path):
+    env = write_env(tmp_path / ".env")
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text("playlist_selection: shuffle\n")
+    with pytest.raises(ValueError) as exc:
+        load_config(env_path=env, yaml_path=yaml_path)
+    assert "playlist_selection" in str(exc.value)
+
+
 def test_yaml_can_supply_credentials_standalone(tmp_path):
     # config.yaml alone satisfies required fields when .env lacks them.
     env = tmp_path / ".env"  # does not exist

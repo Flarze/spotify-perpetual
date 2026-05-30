@@ -51,6 +51,12 @@ class FakeSpotify:
             if err is not None:
                 raise err
 
+    def shuffle(self, state, device_id=None):
+        pass
+
+    def repeat(self, state, device_id=None):
+        pass
+
 
 def stub_ensure_running(monkeypatch):
     calls = []
@@ -107,6 +113,41 @@ def test_run_once_starts_when_idle(tmp_path, monkeypatch):
     assert len(sp.start_calls) == 1
     assert sp.start_calls[0]["device_id"] == "d1"
     assert calls == [0]  # ensure_running called once with launch_wait_seconds
+
+
+def test_run_once_uses_rotator_and_advances_once_per_start(tmp_path, monkeypatch):
+    from idle_player.player import PlaylistRotator
+
+    stub_ensure_running(monkeypatch)
+    rotator = PlaylistRotator(["spotify:playlist:a", "spotify:playlist:b"], "rotate")
+    sp = FakeSpotify(playback=None, devices=[{"id": "d1", "name": "L", "is_active": True}])
+
+    loop.run_once(make_config(tmp_path), sp, logging.getLogger("test"), rotator)
+    loop.run_once(make_config(tmp_path), sp, logging.getLogger("test"), rotator)
+
+    # Two starts -> rotated through both playlists in order.
+    assert [c["context_uri"] for c in sp.start_calls] == [
+        "spotify:playlist:a",
+        "spotify:playlist:b",
+    ]
+
+
+def test_run_once_404_retry_keeps_same_playlist(tmp_path, monkeypatch):
+    from idle_player.player import PlaylistRotator
+
+    stub_ensure_running(monkeypatch)
+    err404 = SpotifyException(404, -1, "no device", reason="NO_ACTIVE_DEVICE")
+    rotator = PlaylistRotator(["a", "b"], "rotate")
+    sp = FakeSpotify(
+        playback=None,
+        devices=[{"id": "d1", "name": "L", "is_active": True}],
+        start_errors=[err404, None],
+    )
+
+    loop.run_once(make_config(tmp_path), sp, logging.getLogger("test"), rotator)
+
+    # Both attempts use the same selection (rotation advanced once, not twice).
+    assert [c["context_uri"] for c in sp.start_calls] == ["a", "a"]
 
 
 def test_run_once_relaunches_and_retries_on_404(tmp_path, monkeypatch):
@@ -209,7 +250,7 @@ def test_wait_for_network_gives_up_after_budget(tmp_path, monkeypatch):
 def test_run_stops_on_premium_required_without_sleeping(tmp_path, monkeypatch):
     config = make_config(tmp_path)
 
-    def boom(cfg, sp, logger):
+    def boom(cfg, sp, logger, rotator=None):
         raise PremiumRequiredError("needs premium")
 
     slept = []

@@ -56,6 +56,23 @@ virtualenv if you prefer to keep things isolated.)
    | `POLL_INTERVAL` | Seconds between checks (default `30`) |
    | `PAUSED_COUNTS_AS_PLAYING` | If `true`, a paused track is treated as "listening" and won't trigger a restart |
 
+### Multiple playlists, shuffle, and repeat
+
+For more than one playlist, plus shuffle and repeat, use `config.yaml` (copy
+`config.example.yaml`). It is auto-loaded from next to your `.env`:
+
+```yaml
+playlist_uris:
+  - spotify:playlist:aaaaaaaaaaaaaaaaaaaaaa
+  - spotify:playlist:bbbbbbbbbbbbbbbbbbbbbb
+playlist_selection: rotate   # rotate (cycle in order) | random
+shuffle: true                # shuffle on each start
+repeat: context              # off | context (loop playlist) | track (loop song)
+```
+
+With several playlists, `rotate` advances to the next one each time playback is
+resumed; `random` picks one each time.
+
 ## Usage
 
 The first run opens a browser once to authorize your account:

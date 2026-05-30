@@ -10,9 +10,9 @@ Precedence: defaults < .env < config.yaml (YAML overrides env).
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import urlparse
 
 import yaml
@@ -25,6 +25,10 @@ class Config:
     client_secret: str
     redirect_uri: str
     playlist_uri: str
+    playlist_uris: List[str] = field(default_factory=list)
+    playlist_selection: str = "rotate"  # "rotate" | "random"
+    shuffle: bool = False
+    repeat: str = "off"  # "off" | "context" | "track"
     poll_interval: int = 30
     token_cache_path: str = ".cache"
     paused_counts_as_playing: bool = True
@@ -40,8 +44,14 @@ class Config:
     log_max_bytes: int = 1048576
     log_backup_count: int = 3
 
+    def playlists(self) -> List[str]:
+        """All configured playlists, falling back to the single playlist_uri."""
+        return self.playlist_uris or [self.playlist_uri]
+
 
 _REQUIRED = ("client_id", "client_secret", "redirect_uri", "playlist_uri")
+_VALID_SELECTION = ("rotate", "random")
+_VALID_REPEAT = ("off", "context", "track")
 
 
 def _normalize_playlist_uri(value: str) -> str:
@@ -60,6 +70,16 @@ def _normalize_playlist_uri(value: str) -> str:
             kind, item_id = parts[0], parts[1]
             return f"spotify:{kind}:{item_id}"
     return value
+
+
+def _resolve_playlists(values: dict) -> list:
+    """Build the normalized playlist list from a yaml list or a single value."""
+    raw = values.get("playlist_uris")
+    if raw:
+        items = raw if isinstance(raw, (list, tuple)) else [raw]
+        return [_normalize_playlist_uri(str(u)) for u in items if str(u).strip()]
+    single = values.get("playlist_uri")
+    return [_normalize_playlist_uri(single)] if single else []
 
 
 def _to_bool(value) -> bool:
@@ -123,6 +143,13 @@ def load_config(
         data = yaml.safe_load(Path(yaml_path).read_text()) or {}
         _merge_yaml(values, data)
 
+    # Resolve the playlist list: a yaml ``playlist_uris`` list takes precedence,
+    # otherwise the single ``playlist_uri`` (env or yaml). Each is normalized.
+    # The first entry backs the single ``playlist_uri`` field for compatibility.
+    playlists = _resolve_playlists(values)
+    if playlists:
+        values["playlist_uri"] = playlists[0]
+
     # Required fields must be present and non-empty.
     env_names = {
         "client_id": "SPOTIFY_CLIENT_ID",
@@ -130,19 +157,36 @@ def load_config(
         "redirect_uri": "SPOTIFY_REDIRECT_URI",
         "playlist_uri": "PLAYLIST_URI",
     }
-    for field in _REQUIRED:
-        if not values.get(field):
+    for name in _REQUIRED:
+        if not values.get(name):
             raise ValueError(
-                f"Missing required config: set {env_names[field]} in your .env "
-                f"(or {field} in config.yaml)."
+                f"Missing required config: set {env_names[name]} in your .env "
+                f"(or {name} in config.yaml)."
             )
+
+    selection = str(values.get("playlist_selection") or "rotate").strip().lower()
+    if selection not in _VALID_SELECTION:
+        raise ValueError(
+            f"Invalid playlist_selection {selection!r}; expected one of {_VALID_SELECTION}."
+        )
+    repeat = str(values.get("repeat") or "off").strip().lower()
+    if repeat not in _VALID_REPEAT:
+        raise ValueError(f"Invalid repeat {repeat!r}; expected one of {_VALID_REPEAT}.")
 
     defaults = Config(client_id="", client_secret="", redirect_uri="", playlist_uri="")
     return Config(
         client_id=values["client_id"],
         client_secret=values["client_secret"],
         redirect_uri=values["redirect_uri"],
-        playlist_uri=_normalize_playlist_uri(values["playlist_uri"]),
+        playlist_uri=playlists[0],
+        playlist_uris=playlists,
+        playlist_selection=selection,
+        shuffle=(
+            _to_bool(values["shuffle"])
+            if values.get("shuffle") is not None
+            else defaults.shuffle
+        ),
+        repeat=repeat,
         poll_interval=_to_int(values.get("poll_interval"), defaults.poll_interval),
         token_cache_path=values["token_cache_path"] or defaults.token_cache_path,
         paused_counts_as_playing=(
@@ -176,6 +220,10 @@ def _merge_yaml(values: dict, data: dict) -> None:
         "client_secret",
         "redirect_uri",
         "playlist_uri",
+        "playlist_uris",
+        "playlist_selection",
+        "shuffle",
+        "repeat",
         "poll_interval",
         "paused_counts_as_playing",
         "token_cache_path",

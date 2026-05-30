@@ -11,9 +11,34 @@ buried assumption.
 
 from __future__ import annotations
 
-from typing import Optional
+import random
+from typing import List, Optional, Sequence
 
 from spotipy.exceptions import SpotifyException
+
+
+class PlaylistRotator:
+    """Pick which playlist to start, given a list and a selection strategy.
+
+    ``rotate`` cycles through the list in order, advancing each time a playlist
+    is actually started. ``random`` picks one at random each time. A single
+    playlist degenerates to always returning it.
+    """
+
+    def __init__(self, playlists: Sequence[str], strategy: str = "rotate"):
+        if not playlists:
+            raise ValueError("PlaylistRotator needs at least one playlist")
+        self._playlists: List[str] = list(playlists)
+        self._strategy = strategy
+        self._index = 0
+
+    def next(self) -> str:
+        """Return the next playlist URI, advancing rotation state."""
+        if self._strategy == "random":
+            return random.choice(self._playlists)
+        uri = self._playlists[self._index % len(self._playlists)]
+        self._index += 1
+        return uri
 
 
 class PremiumRequiredError(Exception):
@@ -93,17 +118,25 @@ def pick_device(sp, preferred_name: str = "") -> Optional[str]:
     return devices[0].get("id")
 
 
-def start_playlist(sp, playlist_uri: str, device_id: Optional[str] = None) -> bool:
+def start_playlist(
+    sp,
+    playlist_uri: str,
+    device_id: Optional[str] = None,
+    shuffle: bool = False,
+    repeat: str = "off",
+) -> bool:
     """Start the playlist; return whether playback was started.
 
     Returns True on success. A "no active device" 404 returns False instead of
     raising: that is the trigger to launch Spotify and retry, not a crash. A
     Premium-required 403 raises PremiumRequiredError so the caller can stop with
     a clear message. Any other error propagates.
+
+    After playback starts, applies the ``shuffle`` and ``repeat`` modes. These
+    are best-effort: a failure to set them does not undo the started playback.
     """
     try:
         sp.start_playback(context_uri=playlist_uri, device_id=device_id)
-        return True
     except SpotifyException as exc:
         if exc.http_status == 404:
             return False
@@ -113,3 +146,16 @@ def start_playlist(sp, playlist_uri: str, device_id: Optional[str] = None) -> bo
                 "be controlled remotely. Free accounts are not supported."
             ) from exc
         raise
+
+    _apply_modes(sp, device_id, shuffle, repeat)
+    return True
+
+
+def _apply_modes(sp, device_id, shuffle: bool, repeat: str) -> None:
+    """Set shuffle and repeat after playback starts. Best-effort: never raises."""
+    try:
+        sp.shuffle(shuffle, device_id=device_id)
+        sp.repeat(repeat, device_id=device_id)
+    except SpotifyException:
+        # Playback already started; these toggles are non-critical extras.
+        pass
