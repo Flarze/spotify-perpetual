@@ -42,7 +42,21 @@ virtualenv if you prefer to keep things isolated.)
 
 1. Create an app in the [Spotify developer dashboard](https://developer.spotify.com/dashboard)
    and add a redirect URI (e.g. `http://127.0.0.1:8888/callback`).
-2. Copy the template and fill in your values:
+
+### Quick setup (recommended)
+
+Run the wizard — it asks for your credentials, playlists, and options, then
+writes `config.yaml` for you (no hand-editing):
+
+```bash
+idle-player setup
+idle-player auth     # one-time browser login
+idle-player          # start it
+```
+
+### Manual setup
+
+Prefer to edit files yourself? Copy the template and fill in your values:
 
    ```bash
    cp .env.example .env

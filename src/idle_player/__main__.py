@@ -4,6 +4,7 @@ With no arguments, wires together config load, auth, and the polling loop, then
 runs it. Subcommands manage OS autostart:
 
     idle-player            run the polling loop (default)
+    idle-player setup      interactively create config.yaml
     idle-player auth       (re-)authorize Spotify and cache the token
     idle-player doctor     run diagnostics and print a pass/fail report
     idle-player install    create an OS autostart entry
@@ -16,6 +17,7 @@ from typing import Optional, Sequence
 
 from . import autostart, single_instance
 from .doctor import run_doctor
+from .wizard import run_setup
 from .auth import (
     TOKEN_INVALID,
     TOKEN_MISSING,
@@ -31,6 +33,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     """Parse arguments and dispatch to the loop or an autostart subcommand."""
     parser = argparse.ArgumentParser(prog="idle-player")
     sub = parser.add_subparsers(dest="command")
+    sub.add_parser("setup", help="interactively create config.yaml")
     auth_p = sub.add_parser("auth", help="(re-)authorize Spotify and cache the token")
     auth_p.add_argument(
         "--no-browser",
@@ -43,7 +46,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     sub.add_parser("status", help="report whether autostart is installed")
     args = parser.parse_args(argv)
 
-    if args.command == "auth":
+    if args.command == "setup":
+        run_setup()
+    elif args.command == "auth":
         config = load_config()
         run_auth_flow(config, open_browser=not args.no_browser)
         print(f"Authorized. Token cached at {config.token_cache_path}.")

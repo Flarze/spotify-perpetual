@@ -104,3 +104,12 @@ def test_main_dispatches_doctor(monkeypatch):
     entry.main(["doctor"])
 
     assert called["v"] is True
+
+
+def test_main_dispatches_setup(monkeypatch):
+    called = {"v": False}
+    monkeypatch.setattr(entry, "run_setup", lambda: called.__setitem__("v", True))
+
+    entry.main(["setup"])
+
+    assert called["v"] is True
