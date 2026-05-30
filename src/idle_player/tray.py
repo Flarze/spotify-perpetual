@@ -28,9 +28,13 @@ from .loop import run, setup_logging, wait_for_network
 APP_NAME = "Spotify Perpetual"
 
 
-def _open_path(path) -> None:
-    """Open a file or folder with the OS default handler."""
-    target = str(path)
+def _open_path(path) -> bool:
+    """Open a file or folder with the OS default handler. Return success.
+
+    The path is resolved to an absolute one first (the tray's working directory
+    is not guaranteed to match where the relative log/config paths point).
+    """
+    target = str(Path(path).expanduser().resolve())
     try:
         if sys.platform == "win32":
             os.startfile(target)  # noqa: S606 - intended shell open
@@ -38,8 +42,20 @@ def _open_path(path) -> None:
             subprocess.Popen(["open", target])
         else:
             subprocess.Popen(["xdg-open", target])
+        return True
     except OSError:
-        pass
+        return False
+
+
+def _open_log(log_file) -> None:
+    """Open the log file; fall back to its folder if it can't be opened.
+
+    A missing file, or a ``.log`` extension with no associated app on Windows,
+    would otherwise do nothing — opening the containing folder always works.
+    """
+    log = Path(log_file)
+    if not log.exists() or not _open_path(log):
+        _open_path(log.parent if str(log.parent) else ".")
 
 
 def _make_image(running: bool):
@@ -94,7 +110,7 @@ def run_tray() -> int:
         _refresh()
 
     def on_logs(_icon, _item) -> None:
-        _open_path(config.log_file)
+        _open_log(config.log_file)
 
     def on_config(_icon, _item) -> None:
         cfg = Path("config.yaml")
