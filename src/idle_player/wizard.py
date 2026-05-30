@@ -9,7 +9,6 @@ the user at ``idle-player auth``.
 
 from __future__ import annotations
 
-import getpass
 from pathlib import Path
 
 from .config import _normalize_playlist_uri, app_dir, load_config
@@ -142,7 +141,7 @@ resume_paused_track: {str(values['resume_paused_track']).lower()}
 def run_setup(
     config_path: str = None,
     input_fn=input,
-    secret_fn=getpass.getpass,
+    secret_fn=input,  # visible: getpass can't disable echo in the exe's console
     output=print,
 ) -> int:
     """Run the interactive wizard, write config_path, and validate it.
