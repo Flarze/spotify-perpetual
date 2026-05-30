@@ -87,7 +87,11 @@ def load_config(
 
     Args:
         env_path: path to a .env file. Defaults to ".env" in the cwd.
-        yaml_path: optional path to config.yaml whose keys override .env values.
+        yaml_path: explicit path to a config.yaml whose keys override .env
+            values. If omitted, a ``config.yaml`` sitting next to ``env_path`` is
+            auto-discovered and used. config.yaml may supply every setting
+            (including credentials), so it can serve as a complete standalone
+            config — the path the planned first-run wizard writes.
 
     Raises:
         ValueError: if a required field is missing or empty, with the offending
@@ -95,6 +99,12 @@ def load_config(
     """
     env_path = Path(env_path) if env_path is not None else Path(".env")
     env = dotenv_values(env_path) if env_path.exists() else {}
+
+    # Auto-discover config.yaml beside the .env when the caller did not pass one.
+    if yaml_path is None:
+        candidate = env_path.parent / "config.yaml"
+        if candidate.exists():
+            yaml_path = candidate
 
     values = {
         "client_id": env.get("SPOTIFY_CLIENT_ID"),
@@ -149,8 +159,21 @@ def load_config(
 
 
 def _merge_yaml(values: dict, data: dict) -> None:
-    """Override env-derived values with config.yaml keys (in place)."""
-    for key in ("poll_interval", "playlist_uri", "paused_counts_as_playing", "token_cache_path"):
+    """Override env-derived values with config.yaml keys (in place).
+
+    Top-level keys mirror the .env settings (including credentials) so a
+    config.yaml can be a complete, standalone config rather than only an
+    overlay on .env.
+    """
+    for key in (
+        "client_id",
+        "client_secret",
+        "redirect_uri",
+        "playlist_uri",
+        "poll_interval",
+        "paused_counts_as_playing",
+        "token_cache_path",
+    ):
         if key in data:
             values[key] = data[key]
 

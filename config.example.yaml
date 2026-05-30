@@ -1,7 +1,23 @@
-# Optional config. Copy to config.yaml (gitignored) to override .env defaults.
+# Optional config. Copy to config.yaml (gitignored) to configure the app.
+#
+# config.yaml is auto-loaded when it sits next to your .env. It can either
+# override individual .env values or hold the entire configuration on its own
+# (credentials included) — useful as a single file a setup wizard can write.
+# YAML keys take precedence over .env. Leave a key out to keep the .env value
+# (or the built-in default).
+#
+# config.yaml is a SECRET if it holds credentials — it is gitignored. Never
+# commit it.
 
-poll_interval: 30            # seconds between playback checks
+# Spotify app credentials (https://developer.spotify.com/dashboard).
+# Omit these to keep using the values from .env instead.
+client_id: ""
+client_secret: ""
+redirect_uri: "http://127.0.0.1:8888/callback"
+
 playlist_uri: ""             # spotify:playlist:... to start when idle
+poll_interval: 30            # seconds between playback checks
+token_cache_path: .cache     # where the OAuth token cache is stored (SECRET)
 
 # Treat paused-but-loaded as "listening" (don't restart playback).
 paused_counts_as_playing: true
@@ -14,7 +30,7 @@ device:
 # hammering every poll_interval. Resets to normal cadence on recovery.
 backoff:
   factor: 2                  # each consecutive failure multiplies the delay
-  max_seconds: 600          # cap the backoff delay
+  max_seconds: 600           # cap the backoff delay
 
 logging:
   level: INFO

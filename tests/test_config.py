@@ -133,3 +133,44 @@ def test_yaml_overrides_env(tmp_path):
     assert config.log_file == "logs/app.log"
     assert config.log_max_bytes == 2048
     assert config.log_backup_count == 5
+
+
+def test_yaml_auto_discovered_next_to_env(tmp_path):
+    # No yaml_path passed: a config.yaml beside the .env is found and applied.
+    env = write_env(tmp_path / ".env", POLL_INTERVAL="30")
+    (tmp_path / "config.yaml").write_text("poll_interval: 90\n")
+
+    config = load_config(env_path=env)
+
+    assert config.poll_interval == 90
+
+
+def test_yaml_overrides_backoff(tmp_path):
+    env = write_env(tmp_path / ".env")
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text("backoff:\n  factor: 3\n  max_seconds: 120\n")
+
+    config = load_config(env_path=env, yaml_path=yaml_path)
+
+    assert config.backoff_factor == 3
+    assert config.backoff_max_seconds == 120
+
+
+def test_yaml_can_supply_credentials_standalone(tmp_path):
+    # config.yaml alone satisfies required fields when .env lacks them.
+    env = tmp_path / ".env"  # does not exist
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text(
+        "client_id: yid\n"
+        "client_secret: ysecret\n"
+        "redirect_uri: http://127.0.0.1:8888/callback\n"
+        "playlist_uri: https://open.spotify.com/playlist/37i9dQZF1DX\n"
+    )
+
+    config = load_config(env_path=env, yaml_path=yaml_path)
+
+    assert config.client_id == "yid"
+    assert config.client_secret == "ysecret"
+    assert config.redirect_uri == "http://127.0.0.1:8888/callback"
+    # Normalization still applies to a yaml-supplied playlist URL.
+    assert config.playlist_uri == "spotify:playlist:37i9dQZF1DX"
