@@ -12,6 +12,7 @@ from spotipy.exceptions import SpotifyException
 
 from idle_player import loop
 from idle_player.config import Config
+from idle_player.player import PremiumRequiredError
 
 
 def make_config(tmp_path, **overrides):
@@ -163,3 +164,22 @@ def test_backoff_delay_caps_at_max(tmp_path):
 
     assert loop._backoff_delay(config, 5) == 200  # 30*2^4 = 480, capped to 200
     assert loop._backoff_delay(config, 99) == 200
+
+
+# --- run() premium handling -----------------------------------------------
+
+
+def test_run_stops_on_premium_required_without_sleeping(tmp_path, monkeypatch):
+    config = make_config(tmp_path)
+
+    def boom(cfg, sp, logger):
+        raise PremiumRequiredError("needs premium")
+
+    slept = []
+    monkeypatch.setattr(loop, "run_once", boom)
+    monkeypatch.setattr(loop.time, "sleep", lambda s: slept.append(s))
+
+    # Returns (does not loop forever) and never sleeps/retries.
+    loop.run(config, object())
+
+    assert slept == []

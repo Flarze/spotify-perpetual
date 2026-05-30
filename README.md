@@ -21,7 +21,9 @@ and your speakers are never silent again.
 ## Requirements
 
 - Python 3.9+
-- A Spotify account and a free [Spotify developer app](https://developer.spotify.com/dashboard)
+- A Spotify **Premium** account — remote playback control is Premium-only. On a
+  free account the app detects the 403 and exits with a clear message.
+- A free [Spotify developer app](https://developer.spotify.com/dashboard)
   (for the client ID/secret)
 - The Spotify desktop app installed on the machine that plays audio
 

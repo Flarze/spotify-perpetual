@@ -16,6 +16,21 @@ from typing import Optional
 from spotipy.exceptions import SpotifyException
 
 
+class PremiumRequiredError(Exception):
+    """Raised when Spotify rejects a playback command for lack of Premium.
+
+    Remote playback control is a Premium-only feature; a free account gets a
+    403 that will never succeed on retry, so the loop treats this as fatal and
+    surfaces a clear message rather than hammering every poll.
+    """
+
+
+def _is_premium_required(exc: SpotifyException) -> bool:
+    """True if a 403 looks like the Premium-required playback restriction."""
+    text = " ".join(str(x) for x in (exc.reason, exc.msg) if x).lower()
+    return "premium" in text
+
+
 def should_start_playback(
     playback: Optional[dict], paused_counts_as_playing: bool
 ) -> bool:
@@ -82,8 +97,9 @@ def start_playlist(sp, playlist_uri: str, device_id: Optional[str] = None) -> bo
     """Start the playlist; return whether playback was started.
 
     Returns True on success. A "no active device" 404 returns False instead of
-    raising: that is the trigger to launch Spotify and retry, not a crash. Any
-    other error propagates.
+    raising: that is the trigger to launch Spotify and retry, not a crash. A
+    Premium-required 403 raises PremiumRequiredError so the caller can stop with
+    a clear message. Any other error propagates.
     """
     try:
         sp.start_playback(context_uri=playlist_uri, device_id=device_id)
@@ -91,4 +107,9 @@ def start_playlist(sp, playlist_uri: str, device_id: Optional[str] = None) -> bo
     except SpotifyException as exc:
         if exc.http_status == 404:
             return False
+        if exc.http_status == 403 and _is_premium_required(exc):
+            raise PremiumRequiredError(
+                "Spotify playback control requires Premium; this account cannot "
+                "be controlled remotely. Free accounts are not supported."
+            ) from exc
         raise

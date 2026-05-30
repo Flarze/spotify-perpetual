@@ -9,6 +9,7 @@ import pytest
 from spotipy.exceptions import SpotifyException
 
 from idle_player.player import (
+    PremiumRequiredError,
     get_playback,
     pick_device,
     should_start_playback,
@@ -130,4 +131,19 @@ def test_start_playlist_reraises_other_errors():
     err = SpotifyException(403, -1, "Forbidden")
     sp = FakeSpotify(start_error=err)
     with pytest.raises(SpotifyException):
+        start_playlist(sp, "spotify:playlist:x")
+
+
+def test_start_playlist_premium_403_reason_raises_premium_error():
+    err = SpotifyException(403, -1, "Player command failed", reason="PREMIUM_REQUIRED")
+    sp = FakeSpotify(start_error=err)
+    with pytest.raises(PremiumRequiredError):
+        start_playlist(sp, "spotify:playlist:x")
+
+
+def test_start_playlist_premium_403_message_raises_premium_error():
+    # Some responses carry the hint in the message rather than reason.
+    err = SpotifyException(403, -1, "Player command failed: Premium required")
+    sp = FakeSpotify(start_error=err)
+    with pytest.raises(PremiumRequiredError):
         start_playlist(sp, "spotify:playlist:x")

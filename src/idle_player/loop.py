@@ -13,7 +13,13 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from .config import Config
-from .player import get_playback, pick_device, should_start_playback, start_playlist
+from .player import (
+    PremiumRequiredError,
+    get_playback,
+    pick_device,
+    should_start_playback,
+    start_playlist,
+)
 from .spotify_process import ensure_running
 
 LOGGER_NAME = "idle_player"
@@ -110,6 +116,10 @@ def run(config: Config, sp) -> None:
             failures = 0  # recovered: drop back to normal cadence
         except KeyboardInterrupt:
             logger.info("interrupted; shutting down")
+            break
+        except PremiumRequiredError as exc:
+            # Free account: retrying never succeeds, so stop instead of looping.
+            logger.error("%s", exc)
             break
         except Exception:  # noqa: BLE001 - keep the daemon alive on transient errors
             failures += 1
