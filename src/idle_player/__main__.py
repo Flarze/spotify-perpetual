@@ -5,6 +5,7 @@ runs it. Subcommands manage OS autostart:
 
     idle-player            run the polling loop (default)
     idle-player auth       (re-)authorize Spotify and cache the token
+    idle-player doctor     run diagnostics and print a pass/fail report
     idle-player install    create an OS autostart entry
     idle-player uninstall  remove it
     idle-player status     report whether it is installed
@@ -14,6 +15,7 @@ import argparse
 from typing import Optional, Sequence
 
 from . import autostart, single_instance
+from .doctor import run_doctor
 from .auth import (
     TOKEN_INVALID,
     TOKEN_MISSING,
@@ -35,6 +37,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         action="store_true",
         help="print the authorize URL and prompt for the redirect (headless/WSL)",
     )
+    sub.add_parser("doctor", help="run diagnostics and print a pass/fail report")
     sub.add_parser("install", help="create an OS autostart entry")
     sub.add_parser("uninstall", help="remove the OS autostart entry")
     sub.add_parser("status", help="report whether autostart is installed")
@@ -44,6 +47,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         config = load_config()
         run_auth_flow(config, open_browser=not args.no_browser)
         print(f"Authorized. Token cached at {config.token_cache_path}.")
+    elif args.command == "doctor":
+        run_doctor()
     elif args.command == "install":
         autostart.install()
     elif args.command == "uninstall":

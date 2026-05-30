@@ -95,3 +95,12 @@ def test_main_dispatches_subcommands(monkeypatch):
     entry.main(["status"])
 
     assert calls == ["install", "uninstall", "status"]
+
+
+def test_main_dispatches_doctor(monkeypatch):
+    called = {"v": False}
+    monkeypatch.setattr(entry, "run_doctor", lambda: called.__setitem__("v", True))
+
+    entry.main(["doctor"])
+
+    assert called["v"] is True

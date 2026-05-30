@@ -79,6 +79,18 @@ On startup the app checks the saved login first. If it is missing, expired, or
 revoked, it prints a clear `Run idle-player auth ...` message and exits instead
 of silently failing on every poll.
 
+## Troubleshooting
+
+Run the built-in diagnostics to check everything at once:
+
+```bash
+idle-player doctor
+```
+
+It reports a pass/fail line for your credentials, network reachability, saved
+token, account tier, and reachable Connect devices — handy when autostart is
+not doing anything and you need to know why.
+
 ## Running at startup
 
 From the repo root, in the same environment where you installed the package,
