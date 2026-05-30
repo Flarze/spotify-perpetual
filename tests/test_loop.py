@@ -166,6 +166,43 @@ def test_backoff_delay_caps_at_max(tmp_path):
     assert loop._backoff_delay(config, 99) == 200
 
 
+# --- wait_for_network -----------------------------------------------------
+
+
+def test_wait_for_network_returns_immediately_when_up(tmp_path, monkeypatch):
+    config = make_config(tmp_path, network_wait_attempts=5, network_wait_interval=5)
+    slept = []
+    monkeypatch.setattr(loop.time, "sleep", lambda s: slept.append(s))
+
+    ok = loop.wait_for_network(config, logging.getLogger("test"), probe=lambda *a: True)
+
+    assert ok is True
+    assert slept == []  # no waiting when reachable on first try
+
+
+def test_wait_for_network_retries_then_succeeds(tmp_path, monkeypatch):
+    config = make_config(tmp_path, network_wait_attempts=5, network_wait_interval=5)
+    slept = []
+    monkeypatch.setattr(loop.time, "sleep", lambda s: slept.append(s))
+    results = iter([False, False, True])
+
+    ok = loop.wait_for_network(config, logging.getLogger("test"), probe=lambda *a: next(results))
+
+    assert ok is True
+    assert slept == [5, 5]  # slept between the two failed attempts
+
+
+def test_wait_for_network_gives_up_after_budget(tmp_path, monkeypatch):
+    config = make_config(tmp_path, network_wait_attempts=3, network_wait_interval=5)
+    slept = []
+    monkeypatch.setattr(loop.time, "sleep", lambda s: slept.append(s))
+
+    ok = loop.wait_for_network(config, logging.getLogger("test"), probe=lambda *a: False)
+
+    assert ok is False
+    assert slept == [5, 5]  # no sleep after the final attempt
+
+
 # --- run() premium handling -----------------------------------------------
 
 

@@ -32,6 +32,9 @@ class Config:
     launch_wait_seconds: int = 8
     backoff_factor: int = 2
     backoff_max_seconds: int = 600
+    network_wait_attempts: int = 12
+    network_wait_interval: int = 5
+    network_probe_timeout: int = 3
     log_level: str = "INFO"
     log_file: str = "logs/idle_player.log"
     log_max_bytes: int = 1048576
@@ -151,6 +154,9 @@ def load_config(
         launch_wait_seconds=_to_int(values.get("launch_wait_seconds"), defaults.launch_wait_seconds),
         backoff_factor=_to_int(values.get("backoff_factor"), defaults.backoff_factor),
         backoff_max_seconds=_to_int(values.get("backoff_max_seconds"), defaults.backoff_max_seconds),
+        network_wait_attempts=_to_int(values.get("network_wait_attempts"), defaults.network_wait_attempts),
+        network_wait_interval=_to_int(values.get("network_wait_interval"), defaults.network_wait_interval),
+        network_probe_timeout=_to_int(values.get("network_probe_timeout"), defaults.network_probe_timeout),
         log_level=values.get("log_level", defaults.log_level),
         log_file=values.get("log_file", defaults.log_file),
         log_max_bytes=_to_int(values.get("log_max_bytes"), defaults.log_max_bytes),
@@ -188,6 +194,14 @@ def _merge_yaml(values: dict, data: dict) -> None:
         values["backoff_factor"] = backoff["factor"]
     if "max_seconds" in backoff:
         values["backoff_max_seconds"] = backoff["max_seconds"]
+
+    network = data.get("network") or {}
+    if "wait_attempts" in network:
+        values["network_wait_attempts"] = network["wait_attempts"]
+    if "wait_interval" in network:
+        values["network_wait_interval"] = network["wait_interval"]
+    if "probe_timeout" in network:
+        values["network_probe_timeout"] = network["probe_timeout"]
 
     logging_cfg = data.get("logging") or {}
     if "level" in logging_cfg:

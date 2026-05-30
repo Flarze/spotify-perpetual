@@ -24,6 +24,8 @@ def test_main_wires_config_client_and_run(monkeypatch):
     monkeypatch.setattr(entry, "build_client", fake_build_client)
     monkeypatch.setattr(entry, "run", fake_run)
     monkeypatch.setattr(entry, "token_health", lambda c: TOKEN_OK)
+    monkeypatch.setattr(entry, "setup_logging", lambda c: None)
+    monkeypatch.setattr(entry, "wait_for_network", lambda c, logger: True)
     monkeypatch.setattr(entry.single_instance, "acquire", lambda path: True)
     monkeypatch.setattr(entry.single_instance, "release", lambda path: None)
 
@@ -38,6 +40,8 @@ def test_main_aborts_loop_when_token_unhealthy(monkeypatch, capsys):
     for state, expect in ((TOKEN_MISSING, "authorize"), (TOKEN_INVALID, "re-link")):
         calls = {"build": False, "run": False}
         monkeypatch.setattr(entry, "load_config", lambda: object())
+        monkeypatch.setattr(entry, "setup_logging", lambda c: None)
+        monkeypatch.setattr(entry, "wait_for_network", lambda c, logger: True)
         monkeypatch.setattr(entry, "token_health", lambda c, s=state: s)
         monkeypatch.setattr(entry, "build_client", lambda c: calls.__setitem__("build", True))
         monkeypatch.setattr(entry, "run", lambda c, sp: calls.__setitem__("run", True))

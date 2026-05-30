@@ -32,6 +32,12 @@ backoff:
   factor: 2                  # each consecutive failure multiplies the delay
   max_seconds: 600           # cap the backoff delay
 
+# Wait for the network at startup (autostart at login can beat the network up).
+network:
+  wait_attempts: 12          # how many times to probe before giving up
+  wait_interval: 5           # seconds between probes
+  probe_timeout: 3           # per-probe TCP connect timeout
+
 logging:
   level: INFO
   file: logs/idle_player.log

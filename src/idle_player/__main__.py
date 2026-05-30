@@ -22,7 +22,7 @@ from .auth import (
     token_health,
 )
 from .config import load_config
-from .loop import run
+from .loop import run, setup_logging, wait_for_network
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -57,6 +57,10 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             return
         try:
             config = load_config()
+            logger = setup_logging(config)
+            # Autostart may run before the network is up; wait briefly first so
+            # the token check / first poll do not fail spuriously.
+            wait_for_network(config, logger)
             if not _check_token(config):
                 return
             sp = build_client(config)

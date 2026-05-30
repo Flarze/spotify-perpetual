@@ -8,6 +8,7 @@ rotating file so autostart/headless runs are debuggable.
 from __future__ import annotations
 
 import logging
+import socket
 import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -23,6 +24,50 @@ from .player import (
 from .spotify_process import ensure_running
 
 LOGGER_NAME = "idle_player"
+
+# Host probed to decide whether the network is up at boot.
+PROBE_HOST = "api.spotify.com"
+PROBE_PORT = 443
+
+
+def _probe(host: str, port: int, timeout: float) -> bool:
+    """Return True if a TCP connection to host:port succeeds within timeout."""
+    try:
+        socket.create_connection((host, port), timeout=timeout).close()
+        return True
+    except OSError:
+        return False
+
+
+def wait_for_network(config: Config, logger: logging.Logger, probe=_probe) -> bool:
+    """Block until Spotify is reachable, or the attempt budget is exhausted.
+
+    Autostart at login can fire before the network is up; without this the very
+    first API call (or token refresh) fails. Retries a quick TCP probe up to
+    ``network_wait_attempts`` times, ``network_wait_interval`` seconds apart.
+
+    Returns True once reachable. Returns False if still unreachable after the
+    budget — the caller continues anyway, leaving the loop's normal error
+    handling to cope.
+    """
+    attempts = max(1, config.network_wait_attempts)
+    for attempt in range(1, attempts + 1):
+        if probe(PROBE_HOST, PROBE_PORT, config.network_probe_timeout):
+            if attempt > 1:
+                logger.info("network reachable after %d attempt(s)", attempt)
+            return True
+        if attempt < attempts:
+            logger.info(
+                "network not up yet (attempt %d/%d); retrying in %ss",
+                attempt,
+                attempts,
+                config.network_wait_interval,
+            )
+            time.sleep(config.network_wait_interval)
+    logger.warning(
+        "network still unreachable after %d attempt(s); continuing anyway", attempts
+    )
+    return False
 
 
 def setup_logging(config: Config) -> logging.Logger:
