@@ -12,6 +12,10 @@ if (-not (Test-Path $py)) {
     Write-Error "No venv at .\.venv. Create one and 'pip install -e .[tray]' first."
 }
 
+# A running instance locks dist\Spotify Perpetual.exe and breaks the rebuild.
+Write-Host "Stopping any running Spotify Perpetual..."
+Stop-Process -Name "Spotify Perpetual" -Force -ErrorAction SilentlyContinue
+
 Write-Host "Installing build dependencies..."
 & $py -m pip install -e ".[tray,build]"
 
