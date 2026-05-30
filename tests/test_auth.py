@@ -7,8 +7,18 @@ path without hitting Spotify.
 """
 
 import spotipy
+from spotipy.oauth2 import SpotifyOauthError
 
-from idle_player.auth import SCOPES, build_client
+from idle_player import auth as auth_mod
+from idle_player.auth import (
+    SCOPES,
+    TOKEN_INVALID,
+    TOKEN_MISSING,
+    TOKEN_OK,
+    build_client,
+    run_auth_flow,
+    token_health,
+)
 from idle_player.config import Config
 
 
@@ -55,3 +65,92 @@ def test_open_browser_defaults_true():
 def test_open_browser_can_be_disabled():
     client = build_client(make_config(), open_browser=False)
     assert client.auth_manager.open_browser is False
+
+
+# --- token_health ---------------------------------------------------------
+
+
+class FakeAuthManager:
+    """Stand-in for SpotifyOAuth: cached token + controllable expiry/refresh."""
+
+    def __init__(self, token, expired=False, refresh_error=False):
+        self._token = token
+        self._expired = expired
+        self._refresh_error = refresh_error
+        self.refreshed = False
+
+        manager = self
+
+        class _Handler:
+            def get_cached_token(self):
+                return manager._token
+
+        self.cache_handler = _Handler()
+
+    def is_token_expired(self, token_info):
+        return self._expired
+
+    def refresh_access_token(self, refresh_token):
+        self.refreshed = True
+        if self._refresh_error:
+            raise SpotifyOauthError("invalid_grant")
+
+
+def test_token_health_missing_when_no_cache():
+    am = FakeAuthManager(token=None)
+    assert token_health(make_config(), auth_manager=am) == TOKEN_MISSING
+
+
+def test_token_health_ok_when_token_valid():
+    am = FakeAuthManager(token={"access_token": "x"}, expired=False)
+    assert token_health(make_config(), auth_manager=am) == TOKEN_OK
+    assert am.refreshed is False  # no network when not expired
+
+
+def test_token_health_ok_when_expired_but_refreshable():
+    am = FakeAuthManager(
+        token={"access_token": "x", "refresh_token": "r"}, expired=True
+    )
+    assert token_health(make_config(), auth_manager=am) == TOKEN_OK
+    assert am.refreshed is True
+
+
+def test_token_health_invalid_when_expired_no_refresh_token():
+    am = FakeAuthManager(token={"access_token": "x"}, expired=True)
+    assert token_health(make_config(), auth_manager=am) == TOKEN_INVALID
+
+
+def test_token_health_invalid_when_refresh_rejected():
+    am = FakeAuthManager(
+        token={"access_token": "x", "refresh_token": "r"},
+        expired=True,
+        refresh_error=True,
+    )
+    assert token_health(make_config(), auth_manager=am) == TOKEN_INVALID
+
+
+# --- run_auth_flow --------------------------------------------------------
+
+
+def test_run_auth_flow_clears_cache_and_authorizes(tmp_path, monkeypatch):
+    cache = tmp_path / ".cache"
+    cache.write_text("stale token")
+    config = make_config(token_cache_path=str(cache))
+
+    flow = {}
+
+    class _AM:
+        def get_access_token(self, as_dict=True):
+            flow["called"] = True
+            flow["cache_existed_at_call"] = cache.exists()
+
+    monkeypatch.setattr(
+        auth_mod, "build_auth_manager", lambda c, open_browser=True: flow.update(browser=open_browser) or _AM()
+    )
+
+    run_auth_flow(config, open_browser=False)
+
+    assert flow["called"] is True
+    assert flow["browser"] is False
+    # Stale cache removed before the flow runs (forces full re-login).
+    assert flow["cache_existed_at_call"] is False

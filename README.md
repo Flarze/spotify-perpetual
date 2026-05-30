@@ -65,6 +65,18 @@ idle-player          # or: python -m idle_player
 After that, the access token is cached and every later run is headless, with no
 browser needed. Leave it running and it keeps your playlist alive.
 
+You can also authorize explicitly (useful for first-time setup or to re-link a
+revoked account) without starting the loop:
+
+```bash
+idle-player auth               # opens a browser to authorize
+idle-player auth --no-browser  # headless/WSL: prints a URL to paste back
+```
+
+On startup the app checks the saved login first. If it is missing, expired, or
+revoked, it prints a clear `Run idle-player auth ...` message and exits instead
+of silently failing on every poll.
+
 ## Running at startup
 
 From the repo root, in the same environment where you installed the package,
