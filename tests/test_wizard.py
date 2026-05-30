@@ -98,6 +98,58 @@ def test_setup_single_playlist_skips_selection_prompt(tmp_path):
     assert data["resume_paused_track"] is False
 
 
+def test_setup_requires_nonempty_secret(tmp_path):
+    # Secret is empty first, then provided; wizard must re-ask, not accept blank.
+    answers = ["cid", "", "spotify:playlist:a", "", "", "", "n", ""]
+    out = []
+    rc = run_setup(
+        config_path=str(tmp_path / "config.yaml"),
+        input_fn=Script(answers),
+        secret_fn=Script(["", "realsecret"]),
+        output=out.append,
+    )
+    assert rc == 0
+    data = yaml.safe_load((tmp_path / "config.yaml").read_text())
+    assert data["client_secret"] == "realsecret"
+
+
+def test_setup_bool_reasks_on_garbage(tmp_path):
+    # "maybe" is not yes/no -> re-ask; then "y" -> True.
+    answers = ["cid", "", "spotify:playlist:a", "", "maybe", "y", "", "n", ""]
+    out = []
+    rc = run_setup(
+        config_path=str(tmp_path / "config.yaml"),
+        input_fn=Script(answers),
+        secret_fn=lambda prompt="": "s",
+        output=out.append,
+    )
+    assert rc == 0
+    data = yaml.safe_load((tmp_path / "config.yaml").read_text())
+    assert data["shuffle"] is True
+
+
+def test_setup_blank_applies_all_defaults(tmp_path):
+    # One playlist given; every optional answer left blank -> documented defaults.
+    # Order: id, redirect, playlist, finish, shuffle, repeat, auto-resume,
+    # resume-track (asked because auto-resume defaults yes), poll.
+    answers = ["cid", "", "spotify:playlist:a", "", "", "", "", "", ""]
+    out = []
+    rc = run_setup(
+        config_path=str(tmp_path / "config.yaml"),
+        input_fn=Script(answers),
+        secret_fn=lambda prompt="": "s",
+        output=out.append,
+    )
+    assert rc == 0
+    data = yaml.safe_load((tmp_path / "config.yaml").read_text())
+    assert data["redirect_uri"] == "http://127.0.0.1:8888/callback"
+    assert data["shuffle"] is False
+    assert data["repeat"] == "off"
+    assert data["poll_interval"] == 30
+    assert data["paused_counts_as_playing"] is False  # auto-resume default yes
+    assert data["resume_paused_track"] is False
+
+
 def test_setup_aborts_without_overwrite(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text("playlists: spotify:playlist:keep\n")

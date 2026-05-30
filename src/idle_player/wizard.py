@@ -17,60 +17,75 @@ from .config import _normalize_playlist_uri, load_config
 DEFAULT_REDIRECT_URI = "http://127.0.0.1:8888/callback"
 
 
-def _prompt(input_fn, label: str, default: str = None) -> str:
-    """Prompt until a non-empty value is given, or return the default."""
-    suffix = f" [{default}]" if default else ""
+def _prompt(input_fn, label: str, default: str = None, output=print) -> str:
+    """Prompt for a value. Blank applies the default; no default means required."""
+    suffix = f" (default: {default})" if default else " (required)"
     while True:
         value = input_fn(f"{label}{suffix}: ").strip()
         if value:
             return value
         if default is not None:
             return default
-        print("  (required)")
+        output("  value is required.")
 
 
-def _prompt_bool(input_fn, label: str, default: bool = False) -> bool:
-    hint = "Y/n" if default else "y/N"
-    value = input_fn(f"{label} [{hint}]: ").strip().lower()
-    if not value:
-        return default
-    return value in ("y", "yes", "true", "1", "on")
+def _prompt_secret(secret_fn, label: str, output=print) -> str:
+    """Prompt for a required secret (no echo, no default)."""
+    while True:
+        value = secret_fn(f"{label} (required): ").strip()
+        if value:
+            return value
+        output("  value is required.")
 
 
-def _prompt_choice(input_fn, label: str, choices, default: str) -> str:
+def _prompt_bool(input_fn, label: str, default: bool = False, output=print) -> bool:
+    """Yes/no prompt. Blank applies the default; unrecognized input re-asks."""
+    shown = "yes" if default else "no"
+    while True:
+        value = input_fn(f"{label} (yes/no, default: {shown}): ").strip().lower()
+        if not value:
+            return default
+        if value in ("y", "yes"):
+            return True
+        if value in ("n", "no"):
+            return False
+        output("  please answer yes or no.")
+
+
+def _prompt_choice(input_fn, label: str, choices, default: str, output=print) -> str:
     options = "/".join(choices)
     while True:
-        value = input_fn(f"{label} ({options}) [{default}]: ").strip().lower()
+        value = input_fn(f"{label} ({options}, default: {default}): ").strip().lower()
         if not value:
             return default
         if value in choices:
             return value
-        print(f"  choose one of: {options}")
+        output(f"  choose one of: {options}")
 
 
-def _prompt_int(input_fn, label: str, default: int) -> int:
+def _prompt_int(input_fn, label: str, default: int, output=print) -> int:
     while True:
-        value = input_fn(f"{label} [{default}]: ").strip()
+        value = input_fn(f"{label} (default: {default}): ").strip()
         if not value:
             return default
         try:
             return int(value)
         except ValueError:
-            print("  enter a whole number")
+            output("  enter a whole number.")
 
 
-def _prompt_playlists(input_fn) -> list:
+def _prompt_playlists(input_fn, output=print) -> list:
     """Collect one or more playlists (URL or URI), normalized to URIs."""
-    print("Playlists to keep alive (paste a Spotify link or URI). Blank line to finish.")
+    output("Playlists to keep alive (paste a Spotify link or URI). Blank line to finish.")
     playlists: list = []
     while True:
         nth = len(playlists) + 1
-        tail = " (blank to finish)" if playlists else ""
+        tail = " (blank to finish)" if playlists else " (required)"
         raw = input_fn(f"  playlist #{nth}{tail}: ").strip()
         if not raw:
             if playlists:
                 return playlists
-            print("  at least one playlist is required")
+            output("  at least one playlist is required.")
             continue
         playlists.append(_normalize_playlist_uri(raw))
 
@@ -113,34 +128,36 @@ def run_setup(
     """
     path = Path(config_path)
     if path.exists() and not _prompt_bool(
-        input_fn, f"{config_path} already exists. Overwrite?", False
+        input_fn, f"{config_path} already exists. Overwrite?", False, output
     ):
         output("Aborted; existing config left unchanged.")
         return 1
 
-    output("\n== Spotify app credentials (https://developer.spotify.com/dashboard) ==")
-    client_id = _prompt(input_fn, "Client ID")
-    client_secret = secret_fn("Client secret: ").strip()
-    redirect_uri = _prompt(input_fn, "Redirect URI", DEFAULT_REDIRECT_URI)
+    output("Press Enter to accept the (default) shown for any question.\n")
+
+    output("== Spotify app credentials (https://developer.spotify.com/dashboard) ==")
+    client_id = _prompt(input_fn, "Client ID", output=output)
+    client_secret = _prompt_secret(secret_fn, "Client secret", output=output)
+    redirect_uri = _prompt(input_fn, "Redirect URI", DEFAULT_REDIRECT_URI, output=output)
 
     output("\n== Playlists ==")
-    playlists = _prompt_playlists(input_fn)
+    playlists = _prompt_playlists(input_fn, output=output)
 
     output("\n== Playback options ==")
     selection = (
-        _prompt_choice(input_fn, "Selection with several playlists", ("rotate", "random"), "rotate")
+        _prompt_choice(input_fn, "Selection with several playlists", ("rotate", "random"), "rotate", output)
         if len(playlists) > 1
         else "rotate"
     )
-    shuffle = _prompt_bool(input_fn, "Shuffle on start?", False)
-    repeat = _prompt_choice(input_fn, "Repeat", ("off", "context", "track"), "off")
-    resume_on_pause = _prompt_bool(input_fn, "Auto-resume when you pause playback?", True)
+    shuffle = _prompt_bool(input_fn, "Shuffle on start?", False, output)
+    repeat = _prompt_choice(input_fn, "Repeat", ("off", "context", "track"), "off", output)
+    resume_on_pause = _prompt_bool(input_fn, "Auto-resume when you pause playback?", True, output)
     resume_track = (
-        _prompt_bool(input_fn, "  Resume the same track (not a new playlist)?", False)
+        _prompt_bool(input_fn, "  Resume the same track (not a new playlist)?", False, output)
         if resume_on_pause
         else False
     )
-    poll_interval = _prompt_int(input_fn, "Poll interval (seconds)", 30)
+    poll_interval = _prompt_int(input_fn, "Poll interval (seconds)", 30, output)
 
     values = {
         "client_id": client_id,
