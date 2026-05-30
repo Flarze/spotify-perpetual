@@ -52,26 +52,26 @@ virtualenv if you prefer to keep things isolated.)
    |---------|-------------|
    | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | From your developer app |
    | `SPOTIFY_REDIRECT_URI` | Must match the dashboard exactly |
-   | `PLAYLIST_URI` | Playlist to resume, e.g. `spotify:playlist:...` |
+   | `PLAYLISTS` | Playlist(s) to resume — one, or several separated by commas, e.g. `spotify:playlist:aaaa,spotify:playlist:bbbb` |
    | `POLL_INTERVAL` | Seconds between checks (default `30`) |
    | `PAUSED_COUNTS_AS_PLAYING` | If `true`, a paused track is treated as "listening" and won't trigger a restart |
 
 ### Multiple playlists, shuffle, and repeat
 
-For more than one playlist, plus shuffle and repeat, use `config.yaml` (copy
-`config.example.yaml`). It is auto-loaded from next to your `.env`:
+`PLAYLISTS` takes one playlist or several, comma-separated. For shuffle and
+repeat as well, use `config.yaml` (copy `config.example.yaml`); it is
+auto-loaded from next to your `.env`:
 
 ```yaml
-playlist_uris:
-  - spotify:playlist:aaaaaaaaaaaaaaaaaaaaaa
-  - spotify:playlist:bbbbbbbbbbbbbbbbbbbbbb
-playlist_selection: rotate   # rotate (cycle in order) | random
+playlists: spotify:playlist:aaaa, spotify:playlist:bbbb
+playlist_selection: rotate   # with several: rotate (cycle in order) | random
 shuffle: true                # shuffle on each start
 repeat: context              # off | context (loop playlist) | track (loop song)
 ```
 
-With several playlists, `rotate` advances to the next one each time playback is
-resumed; `random` picks one each time.
+URIs or `open.spotify.com` links both work. With several playlists, `rotate`
+advances to the next one each time playback resumes; `random` picks one each
+time.
 
 ## Usage
 

@@ -15,15 +15,11 @@ client_id: ""
 client_secret: ""
 redirect_uri: "http://127.0.0.1:8888/callback"
 
-# One playlist (simplest)...
-playlist_uri: ""             # spotify:playlist:... to start when idle
+# Playlists to keep alive. One, or several separated by commas. Accepts
+# spotify:playlist:... URIs or open.spotify.com links.
+playlists: ""                # e.g. "spotify:playlist:aaaa, spotify:playlist:bbbb"
 
-# ...or several. If set, playlist_uris takes precedence over playlist_uri.
-# playlist_uris:
-#   - spotify:playlist:aaaaaaaaaaaaaaaaaaaaaa
-#   - https://open.spotify.com/playlist/bbbbbbbbbbbbbbbbbbbbbb
-playlist_selection: rotate   # rotate (cycle in order) | random (pick each time)
-
+playlist_selection: rotate   # with several: rotate (cycle in order) | random
 shuffle: false               # shuffle the playlist when starting
 repeat: "off"                # off | context (loop the playlist) | track (loop one song)
 

@@ -74,13 +74,61 @@ def test_blank_numeric_env_uses_default(tmp_path):
     assert config.poll_interval == 30
 
 
-def test_missing_required_field_raises_readable_error(tmp_path):
+def test_missing_credential_raises_readable_error(tmp_path):
+    env = write_env(tmp_path / ".env", SPOTIFY_CLIENT_ID="")
+
+    with pytest.raises(ValueError) as exc:
+        load_config(env_path=env)
+
+    assert "SPOTIFY_CLIENT_ID" in str(exc.value)
+
+
+def test_missing_playlist_raises_readable_error(tmp_path):
     env = write_env(tmp_path / ".env", PLAYLIST_URI="")
 
     with pytest.raises(ValueError) as exc:
         load_config(env_path=env)
 
-    assert "PLAYLIST_URI" in str(exc.value)
+    msg = str(exc.value).lower()
+    assert "playlist" in msg
+
+
+def test_playlists_comma_separated_env(tmp_path):
+    env = write_env(
+        tmp_path / ".env",
+        PLAYLIST_URI=None,
+        PLAYLISTS="spotify:playlist:a, spotify:playlist:b ,spotify:playlist:c",
+    )
+    config = load_config(env_path=env)
+    assert config.playlists() == [
+        "spotify:playlist:a",
+        "spotify:playlist:b",
+        "spotify:playlist:c",
+    ]
+
+
+def test_playlists_comma_separated_yaml(tmp_path):
+    env = write_env(tmp_path / ".env", PLAYLIST_URI=None)
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text("playlists: spotify:playlist:a, spotify:playlist:b\n")
+    config = load_config(env_path=env, yaml_path=yaml_path)
+    assert config.playlists() == ["spotify:playlist:a", "spotify:playlist:b"]
+
+
+def test_playlists_single_string_yaml(tmp_path):
+    env = write_env(tmp_path / ".env", PLAYLIST_URI=None)
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text("playlists: https://open.spotify.com/playlist/37i9dQZF1DX\n")
+    config = load_config(env_path=env, yaml_path=yaml_path)
+    assert config.playlists() == ["spotify:playlist:37i9dQZF1DX"]
+
+
+def test_playlists_key_takes_precedence_over_legacy(tmp_path):
+    env = write_env(tmp_path / ".env", PLAYLIST_URI="spotify:playlist:legacy")
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text("playlists: spotify:playlist:new1, spotify:playlist:new2\n")
+    config = load_config(env_path=env, yaml_path=yaml_path)
+    assert config.playlists() == ["spotify:playlist:new1", "spotify:playlist:new2"]
 
 
 def test_playlist_uri_already_in_uri_form_unchanged(tmp_path):

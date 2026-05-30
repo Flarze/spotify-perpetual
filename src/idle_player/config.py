@@ -72,14 +72,34 @@ def _normalize_playlist_uri(value: str) -> str:
     return value
 
 
+def _as_playlist_list(value) -> list:
+    """Coerce a playlists value into a normalized list of URIs.
+
+    Accepts a YAML list, a single string, or a comma-separated string (and a
+    list that itself contains comma-separated strings). Whitespace and empty
+    entries are dropped; each item is normalized (URL -> URI).
+    """
+    raw_items = value if isinstance(value, (list, tuple)) else [value]
+    pieces: list = []
+    for item in raw_items:
+        pieces.extend(str(item).split(","))
+    return [_normalize_playlist_uri(p) for p in (s.strip() for s in pieces) if p]
+
+
 def _resolve_playlists(values: dict) -> list:
-    """Build the normalized playlist list from a yaml list or a single value."""
-    raw = values.get("playlist_uris")
-    if raw:
-        items = raw if isinstance(raw, (list, tuple)) else [raw]
-        return [_normalize_playlist_uri(str(u)) for u in items if str(u).strip()]
-    single = values.get("playlist_uri")
-    return [_normalize_playlist_uri(single)] if single else []
+    """Resolve the playlist list from the first key that is set.
+
+    Preference: the unified ``playlists`` key, then the legacy ``playlist_uris``
+    list, then the legacy single ``playlist_uri`` (env ``PLAYLIST_URI``). Each
+    accepts a comma-separated string or a list.
+    """
+    for key in ("playlists", "playlist_uris", "playlist_uri"):
+        raw = values.get(key)
+        if raw:
+            result = _as_playlist_list(raw)
+            if result:
+                return result
+    return []
 
 
 def _to_bool(value) -> bool:
@@ -133,6 +153,7 @@ def load_config(
         "client_id": env.get("SPOTIFY_CLIENT_ID"),
         "client_secret": env.get("SPOTIFY_CLIENT_SECRET"),
         "redirect_uri": env.get("SPOTIFY_REDIRECT_URI"),
+        "playlists": env.get("PLAYLISTS"),
         "playlist_uri": env.get("PLAYLIST_URI"),
         "poll_interval": env.get("POLL_INTERVAL"),
         "token_cache_path": env.get("TOKEN_CACHE_PATH"),
@@ -143,12 +164,16 @@ def load_config(
         data = yaml.safe_load(Path(yaml_path).read_text()) or {}
         _merge_yaml(values, data)
 
-    # Resolve the playlist list: a yaml ``playlist_uris`` list takes precedence,
-    # otherwise the single ``playlist_uri`` (env or yaml). Each is normalized.
+    # Resolve playlists from the unified ``playlists`` key (or legacy keys).
     # The first entry backs the single ``playlist_uri`` field for compatibility.
     playlists = _resolve_playlists(values)
     if playlists:
         values["playlist_uri"] = playlists[0]
+    elif not values.get("playlist_uri"):
+        raise ValueError(
+            "Missing required config: set at least one playlist via PLAYLISTS in "
+            "your .env (comma-separated for several) or `playlists` in config.yaml."
+        )
 
     # Required fields must be present and non-empty.
     env_names = {
@@ -219,6 +244,7 @@ def _merge_yaml(values: dict, data: dict) -> None:
         "client_id",
         "client_secret",
         "redirect_uri",
+        "playlists",
         "playlist_uri",
         "playlist_uris",
         "playlist_selection",
