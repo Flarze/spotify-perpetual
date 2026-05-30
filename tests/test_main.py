@@ -113,3 +113,25 @@ def test_main_dispatches_setup(monkeypatch):
     entry.main(["setup"])
 
     assert called["v"] is True
+
+
+def test_main_dispatches_tray_under_lock(monkeypatch):
+    calls = {"tray": False, "released": False}
+    monkeypatch.setattr(entry, "run_tray", lambda: calls.__setitem__("tray", True))
+    monkeypatch.setattr(entry.single_instance, "acquire", lambda path: True)
+    monkeypatch.setattr(entry.single_instance, "release", lambda path: calls.__setitem__("released", True))
+
+    entry.main(["tray"])
+
+    assert calls["tray"] is True
+    assert calls["released"] is True  # lock released after the tray exits
+
+
+def test_main_tray_exits_if_already_running(monkeypatch):
+    calls = {"tray": False}
+    monkeypatch.setattr(entry, "run_tray", lambda: calls.__setitem__("tray", True))
+    monkeypatch.setattr(entry.single_instance, "acquire", lambda path: False)
+
+    entry.main(["tray"])
+
+    assert calls["tray"] is False  # never starts when another instance holds the lock

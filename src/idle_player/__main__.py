@@ -4,6 +4,7 @@ With no arguments, wires together config load, auth, and the polling loop, then
 runs it. Subcommands manage OS autostart:
 
     idle-player            run the polling loop (default)
+    idle-player tray       run the watcher with a system-tray icon
     idle-player setup      interactively create config.yaml
     idle-player auth       (re-)authorize Spotify and cache the token
     idle-player doctor     run diagnostics and print a pass/fail report
@@ -17,6 +18,7 @@ from typing import Optional, Sequence
 
 from . import autostart, single_instance
 from .doctor import run_doctor
+from .tray import run_tray
 from .wizard import run_setup
 from .auth import (
     TOKEN_INVALID,
@@ -40,6 +42,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         action="store_true",
         help="print the authorize URL and prompt for the redirect (headless/WSL)",
     )
+    sub.add_parser("tray", help="run the watcher with a system-tray icon")
     sub.add_parser("doctor", help="run diagnostics and print a pass/fail report")
     sub.add_parser("install", help="create an OS autostart entry")
     sub.add_parser("uninstall", help="remove the OS autostart entry")
@@ -54,6 +57,15 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print(f"Authorized. Token cached at {config.token_cache_path}.")
     elif args.command == "doctor":
         run_doctor()
+    elif args.command == "tray":
+        lock_path = single_instance.default_lock_path()
+        if not single_instance.acquire(lock_path):
+            print("idle_player is already running; exiting.")
+            return
+        try:
+            run_tray()
+        finally:
+            single_instance.release(lock_path)
     elif args.command == "install":
         autostart.install()
     elif args.command == "uninstall":

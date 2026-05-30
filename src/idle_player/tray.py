@@ -1,0 +1,124 @@
+"""System-tray icon for the watcher (pystray + Pillow).
+
+Runs the polling loop on a background thread and shows a tray icon with the
+current status and a menu to pause/resume the watcher, open the logs or config,
+and quit. pystray works on Windows, macOS, and Linux.
+
+pystray and Pillow are optional extras; install with ``pip install -e .[tray]``.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import threading
+from pathlib import Path
+
+from .auth import (
+    TOKEN_INVALID,
+    TOKEN_MISSING,
+    build_client,
+    token_health,
+)
+from .config import load_config
+from .control import Controller
+from .loop import run, setup_logging, wait_for_network
+
+APP_NAME = "Spotify Perpetual"
+
+
+def _open_path(path) -> None:
+    """Open a file or folder with the OS default handler."""
+    target = str(path)
+    try:
+        if sys.platform == "win32":
+            os.startfile(target)  # noqa: S606 - intended shell open
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", target])
+        else:
+            subprocess.Popen(["xdg-open", target])
+    except OSError:
+        pass
+
+
+def _make_image(running: bool):
+    """A simple round status icon: green when watching, grey when paused."""
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (64, 64), (24, 24, 24))
+    draw = ImageDraw.Draw(img)
+    color = (30, 215, 96) if running else (140, 140, 140)
+    draw.ellipse((10, 10, 54, 54), fill=color)
+    return img
+
+
+def run_tray() -> int:
+    """Start the watcher under a tray icon. Returns a process exit code."""
+    try:
+        import pystray
+    except ImportError:
+        print(
+            "The tray needs extra packages. Install them with:\n"
+            "    pip install -e .[tray]\n"
+            "(or: pip install pystray Pillow)"
+        )
+        return 1
+
+    config = load_config()
+    logger = setup_logging(config)
+
+    # Same pre-flight as the plain run path: wait for network, check the token.
+    wait_for_network(config, logger)
+    health = token_health(config)
+    if health == TOKEN_MISSING:
+        print("No saved Spotify login found. Run `idle-player auth` to authorize.")
+        return 1
+    if health == TOKEN_INVALID:
+        print("Saved Spotify login expired or was revoked. Run `idle-player auth`.")
+        return 1
+
+    sp = build_client(config)
+    controller = Controller()
+    worker = threading.Thread(target=run, args=(config, sp, controller), daemon=True)
+    worker.start()
+
+    icon = pystray.Icon("idle_player", _make_image(running=True), APP_NAME)
+
+    def _refresh() -> None:
+        icon.icon = _make_image(running=not controller.paused)
+        icon.update_menu()
+
+    def on_toggle(_icon, _item) -> None:
+        controller.toggle_pause()
+        _refresh()
+
+    def on_logs(_icon, _item) -> None:
+        _open_path(config.log_file)
+
+    def on_config(_icon, _item) -> None:
+        cfg = Path("config.yaml")
+        _open_path(cfg if cfg.exists() else cfg.parent)
+
+    def on_quit(_icon, _item) -> None:
+        controller.stop()
+        _icon.stop()
+
+    icon.menu = pystray.Menu(
+        pystray.MenuItem(lambda _i: controller.status(), None, enabled=False),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem(
+            lambda _i: "Resume watching" if controller.paused else "Pause watching",
+            on_toggle,
+        ),
+        pystray.MenuItem("Open logs", on_logs),
+        pystray.MenuItem("Open config", on_config),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Quit", on_quit),
+    )
+
+    icon.run()  # blocks until on_quit stops it
+
+    controller.stop()
+    worker.join(timeout=5)
+    return 0

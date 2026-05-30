@@ -24,3 +24,4 @@ where = ["src"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
+tray = ["pystray", "Pillow"]

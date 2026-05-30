@@ -228,13 +228,40 @@ def maybe_reload(config, sp, rotator, mtimes, logger, load=load_config, build=bu
     return new_config, sp, rotator, current, True
 
 
-def run(config: Config, sp) -> None:
+_STATUS_FOR_ACTION = {
+    "skip": "watching — music playing",
+    "started": "watching — started playlist",
+    "resumed": "watching — resumed paused track",
+    "no_device": "watching — no Connect device",
+}
+
+
+def _sleep(delay, controller) -> bool:
+    """Sleep for ``delay``. Return True if the loop should stop.
+
+    With a controller, waits on its stop event so Quit is responsive. Without
+    one, plain sleep with Ctrl-C handling (unchanged legacy behavior).
+    """
+    if controller is not None:
+        return controller.stop_event.wait(delay)
+    try:
+        time.sleep(delay)
+        return False
+    except KeyboardInterrupt:
+        return True
+
+
+def run(config: Config, sp, controller=None) -> None:
     """Poll forever: each interval, run one cycle. Resilient to transient errors.
 
     Transient API/network errors are logged and the loop continues, backing off
     exponentially on repeated failures and resuming normal cadence on recovery.
     Config files are watched for edits and reloaded live. Ctrl-C
     (KeyboardInterrupt) exits cleanly.
+
+    ``controller`` (optional) lets a UI pause/resume/stop the watcher and reads
+    a status string the loop keeps updated. When omitted the loop runs forever
+    as before.
     """
     logger = setup_logging(config)
     rotator = PlaylistRotator(config.playlists(), config.playlist_selection)
@@ -247,30 +274,46 @@ def run(config: Config, sp) -> None:
     mtimes = _watch_mtimes()
     failures = 0
     while True:
+        if controller is not None and controller.stopped:
+            logger.info("stop requested; shutting down")
+            break
+
         config, sp, rotator, mtimes, _ = maybe_reload(
             config, sp, rotator, mtimes, logger
         )
+
+        if controller is not None and controller.paused:
+            controller.set_status("paused (watcher off)")
+            if _sleep(config.poll_interval, controller):
+                break
+            continue
+
         try:
-            run_once(config, sp, logger, rotator)
+            action = run_once(config, sp, logger, rotator)
             failures = 0  # recovered: drop back to normal cadence
+            if controller is not None:
+                controller.set_status(_STATUS_FOR_ACTION.get(action, "watching"))
         except KeyboardInterrupt:
             logger.info("interrupted; shutting down")
             break
         except PremiumRequiredError as exc:
             # Free account: retrying never succeeds, so stop instead of looping.
             logger.error("%s", exc)
+            if controller is not None:
+                controller.set_status("stopped — Premium required")
             break
         except Exception:  # noqa: BLE001 - keep the daemon alive on transient errors
             failures += 1
             logger.exception("transient error; continuing")
+            if controller is not None:
+                controller.set_status("error — retrying")
 
         delay = _backoff_delay(config, failures)
         if failures:
             logger.warning(
                 "backing off %ss after %d consecutive failure(s)", delay, failures
             )
-        try:
-            time.sleep(delay)
-        except KeyboardInterrupt:
-            logger.info("interrupted; shutting down")
+        if _sleep(delay, controller):
+            if controller is None:
+                logger.info("interrupted; shutting down")
             break

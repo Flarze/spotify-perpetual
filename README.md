@@ -134,6 +134,18 @@ It reports a pass/fail line for your credentials, network reachability, saved
 token, account tier, and reachable Connect devices — handy when autostart is
 not doing anything and you need to know why.
 
+## System-tray icon
+
+Prefer a visible control? Run the watcher with a tray icon (green = watching,
+grey = paused) and a menu to pause/resume, open the logs or config, and quit:
+
+```bash
+pip install -e .[tray]   # one-time: installs pystray + Pillow
+idle-player tray
+```
+
+The polling loop runs in the background; the icon just controls and reports it.
+
 ## Running at startup
 
 From the repo root, in the same environment where you installed the package,

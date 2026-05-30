@@ -365,6 +365,49 @@ def test_maybe_reload_keeps_previous_on_bad_edit(tmp_path, monkeypatch):
 # --- run() premium handling -----------------------------------------------
 
 
+def test_run_with_controller_stops_before_any_cycle(tmp_path, monkeypatch):
+    from idle_player.control import Controller
+
+    config = make_config(tmp_path)
+    ctrl = Controller()
+    ctrl.stop()
+    called = []
+    monkeypatch.setattr(loop, "run_once", lambda *a: called.append(1))
+
+    loop.run(config, object(), ctrl)
+
+    assert called == []  # stop seen at top of loop, never runs a cycle
+
+
+def test_run_with_controller_skips_run_once_when_paused(tmp_path, monkeypatch):
+    from idle_player.control import Controller
+
+    config = make_config(tmp_path)
+    ctrl = Controller()
+    ctrl.pause()
+    called = []
+    monkeypatch.setattr(loop, "run_once", lambda *a: called.append(1))
+    monkeypatch.setattr(loop, "_sleep", lambda delay, c: c.stop() or True)
+
+    loop.run(config, object(), ctrl)
+
+    assert called == []  # paused -> no poll cycle
+    assert ctrl.status() == "paused (watcher off)"
+
+
+def test_run_with_controller_updates_status_from_action(tmp_path, monkeypatch):
+    from idle_player.control import Controller
+
+    config = make_config(tmp_path)
+    ctrl = Controller()
+    monkeypatch.setattr(loop, "run_once", lambda *a: "started")
+    monkeypatch.setattr(loop, "_sleep", lambda delay, c: c.stop() or True)
+
+    loop.run(config, object(), ctrl)
+
+    assert ctrl.status() == "watching — started playlist"
+
+
 def test_run_stops_on_premium_required_without_sleeping(tmp_path, monkeypatch):
     config = make_config(tmp_path)
 
