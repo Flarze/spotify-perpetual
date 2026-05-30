@@ -10,6 +10,7 @@ Precedence: defaults < .env < config.yaml (YAML overrides env).
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
@@ -17,6 +18,25 @@ from urllib.parse import urlparse
 
 import yaml
 from dotenv import dotenv_values
+
+
+def app_dir() -> Path:
+    """Base directory for config, cache, and logs.
+
+    For a PyInstaller-frozen exe this is the folder containing the exe, so the
+    app is portable: drop the exe anywhere and its config/cache/logs live beside
+    it. When running from source it is the current working directory (unchanged
+    behavior for development and tests).
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path.cwd()
+
+
+def _abs_under_app_dir(path_str: str) -> str:
+    """Make a relative path absolute under app_dir (used only when frozen)."""
+    p = Path(path_str)
+    return str(p if p.is_absolute() else app_dir() / p)
 
 
 @dataclass
@@ -153,7 +173,7 @@ def load_config(
         ValueError: if a required field is missing or empty, with the offending
             env var name in the message.
     """
-    env_path = Path(env_path) if env_path is not None else Path(".env")
+    env_path = Path(env_path) if env_path is not None else app_dir() / ".env"
     env = dotenv_values(env_path) if env_path.exists() else {}
 
     # Auto-discover config.yaml beside the .env when the caller did not pass one.
@@ -219,6 +239,13 @@ def load_config(
         raise ValueError(f"Invalid volume {volume}; expected 0-100 (or blank to leave unchanged).")
 
     defaults = Config(client_id="", client_secret="", redirect_uri="", playlist_uri="")
+    token_cache_path = values["token_cache_path"] or defaults.token_cache_path
+    log_file = values.get("log_file", defaults.log_file)
+    # When packaged as an exe, keep cache/logs beside the exe (portable) rather
+    # than relative to wherever it was launched from.
+    if getattr(sys, "frozen", False):
+        token_cache_path = _abs_under_app_dir(token_cache_path)
+        log_file = _abs_under_app_dir(log_file)
     return Config(
         client_id=values["client_id"],
         client_secret=values["client_secret"],
@@ -235,7 +262,7 @@ def load_config(
         volume=volume,
         fade_in_seconds=_to_int(values.get("fade_in_seconds"), defaults.fade_in_seconds),
         poll_interval=_to_int(values.get("poll_interval"), defaults.poll_interval),
-        token_cache_path=values["token_cache_path"] or defaults.token_cache_path,
+        token_cache_path=token_cache_path,
         paused_counts_as_playing=(
             _to_bool(values["paused_counts_as_playing"])
             if values.get("paused_counts_as_playing") is not None
@@ -254,7 +281,7 @@ def load_config(
         network_wait_interval=_to_int(values.get("network_wait_interval"), defaults.network_wait_interval),
         network_probe_timeout=_to_int(values.get("network_probe_timeout"), defaults.network_probe_timeout),
         log_level=values.get("log_level", defaults.log_level),
-        log_file=values.get("log_file", defaults.log_file),
+        log_file=log_file,
         log_max_bytes=_to_int(values.get("log_max_bytes"), defaults.log_max_bytes),
         log_backup_count=_to_int(values.get("log_backup_count"), defaults.log_backup_count),
     )

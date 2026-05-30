@@ -7,7 +7,7 @@ raises a clear error when a required field is missing.
 
 import pytest
 
-from idle_player.config import Config, load_config
+from idle_player.config import Config, app_dir, load_config
 
 
 def write_env(path, **overrides):
@@ -202,6 +202,19 @@ def test_yaml_overrides_backoff(tmp_path):
 
     assert config.backoff_factor == 3
     assert config.backoff_max_seconds == 120
+
+
+def test_app_dir_is_cwd_when_not_frozen(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    assert app_dir() == tmp_path
+
+
+def test_app_dir_is_exe_dir_when_frozen(monkeypatch, tmp_path):
+    exe = tmp_path / "Spotify Perpetual.exe"
+    exe.write_text("")
+    monkeypatch.setattr("idle_player.config.sys.frozen", True, raising=False)
+    monkeypatch.setattr("idle_player.config.sys.executable", str(exe))
+    assert app_dir() == tmp_path
 
 
 def test_volume_and_fade_defaults(tmp_path):

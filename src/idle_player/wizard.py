@@ -12,7 +12,7 @@ from __future__ import annotations
 import getpass
 from pathlib import Path
 
-from .config import _normalize_playlist_uri, load_config
+from .config import _normalize_playlist_uri, app_dir, load_config
 
 DEFAULT_REDIRECT_URI = "http://127.0.0.1:8888/callback"
 
@@ -140,16 +140,18 @@ resume_paused_track: {str(values['resume_paused_track']).lower()}
 
 
 def run_setup(
-    config_path: str = "config.yaml",
+    config_path: str = None,
     input_fn=input,
     secret_fn=getpass.getpass,
     output=print,
 ) -> int:
     """Run the interactive wizard, write config_path, and validate it.
 
-    Returns 0 on success, 1 if the user aborted at the overwrite prompt.
+    Defaults to ``config.yaml`` in the app directory (beside the exe when
+    packaged). Returns 0 on success, 1 if the user aborted at the overwrite
+    prompt.
     """
-    path = Path(config_path)
+    path = Path(config_path) if config_path is not None else app_dir() / "config.yaml"
     if path.exists() and not _prompt_bool(
         input_fn, f"{config_path} already exists. Overwrite?", False, output
     ):

@@ -154,17 +154,14 @@ Build a single branded `Spotify Perpetual.exe` (no Python needed to run it):
 .\packaging\build_windows.ps1        # outputs dist\Spotify Perpetual.exe
 ```
 
-The exe is windowed: double-clicking (or autostart) launches the tray. For the
-one-time setup, run the interactive commands from a terminal — a console window
-opens for them:
+Then just **double-click the exe**. On first run it walks you through setup and
+the Spotify login (a console window opens for those prompts), then drops to the
+system tray. Every later launch goes straight to the tray. No commands.
 
-```powershell
-& '.\dist\Spotify Perpetual.exe' setup
-& '.\dist\Spotify Perpetual.exe' auth
-```
-
-Because it carries real version info, Task Manager's Startup tab shows
-"Spotify Perpetual" rather than "python", and it runs as a single process.
+The exe is portable: its config, token cache, and logs live **next to the exe**,
+so move that folder wherever you like. Because it carries real version info,
+Task Manager's Startup tab shows "Spotify Perpetual" rather than "python", and
+it runs as a single process.
 
 ## Running at startup
 

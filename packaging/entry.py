@@ -14,12 +14,6 @@ import sys
 _CONSOLE_COMMANDS = {"setup", "auth", "doctor", "status", "install", "uninstall"}
 
 
-def resolve_argv(argv):
-    """Map exe args to idle_player args. No args -> run the tray."""
-    args = list(argv)
-    return args or ["tray"]
-
-
 def _ensure_console() -> None:
     """Attach a console to the windowed process so prompts/output are visible."""
     if sys.platform != "win32":
@@ -35,12 +29,19 @@ def _ensure_console() -> None:
 
 
 def main() -> None:
-    args = resolve_argv(sys.argv[1:])
-    if args and args[0] in _CONSOLE_COMMANDS:
+    raw = sys.argv[1:]
+    if not raw:
+        # Double-click / autostart: open-and-run (setup + auth if needed, then
+        # tray). A console is allocated only when an interactive step runs.
+        from idle_player.bootstrap import launch
+
+        raise SystemExit(launch(ensure_console=_ensure_console))
+
+    if raw[0] in _CONSOLE_COMMANDS:
         _ensure_console()
     from idle_player.__main__ import main as run_main
 
-    run_main(args)
+    run_main(raw)
 
 
 if __name__ == "__main__":

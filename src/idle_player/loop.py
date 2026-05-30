@@ -15,7 +15,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from .auth import build_client
-from .config import Config, load_config
+from .config import Config, app_dir, load_config
 from .player import (
     PlaylistRotator,
     PremiumRequiredError,
@@ -203,8 +203,12 @@ def _backoff_delay(config: Config, failures: int) -> int:
 
 
 def _watch_mtimes(paths=WATCH_FILES) -> dict:
-    """Snapshot the modification times of the watched config files."""
-    return {p: (os.path.getmtime(p) if os.path.exists(p) else None) for p in paths}
+    """Snapshot the modification times of the watched config files (in app_dir)."""
+    base = app_dir()
+    return {
+        p: (os.path.getmtime(base / p) if (base / p).exists() else None)
+        for p in paths
+    }
 
 
 def maybe_reload(config, sp, rotator, mtimes, logger, load=load_config, build=build_client):
