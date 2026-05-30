@@ -181,6 +181,14 @@ user service on Linux.
 Run `idle-player` once first to complete the browser login so autostart can run
 headless.
 
+Using the standalone exe? Run its `install` from a terminal once — the Startup
+shortcut then points at the exe itself (single branded process), launching the
+tray at login:
+
+```powershell
+& '.\dist\Spotify Perpetual.exe' install
+```
+
 Prefer to set it up by hand? Per-OS templates and step-by-step instructions
 live in [`scripts/`](scripts/):
 

@@ -44,21 +44,37 @@ def _module_args(tray: bool) -> str:
     return "-m idle_player tray" if tray else "-m idle_player"
 
 
-def _windows_shortcut_script(
-    lnk_path: str, python_exe: str, workdir: str, tray: bool = False
-) -> str:
-    """PowerShell that creates a Startup shortcut launching idle_player.
+def _launch_plan(tray: bool) -> dict:
+    """Decide what the Windows Startup shortcut should launch.
 
-    The shortcut targets pythonw.exe directly (no console window, no wscript
-    host) with the repo as its working directory so `.env` and `logs\\` resolve.
-    WindowStyle 7 = minimized; pythonw shows nothing anyway. The shortcut's file
-    name (without `.lnk`) is what Task Manager's Startup tab displays.
+    Running as a packaged exe (frozen): target the exe itself with no arguments
+    — double-clicking it already does the open-and-run flow (setup/auth then
+    tray), and config lives beside the exe. Running from source: target
+    pythonw.exe with ``-m idle_player`` (optionally ``tray``).
+    """
+    if getattr(sys, "frozen", False):
+        exe = sys.executable
+        return {"target": exe, "workdir": str(Path(exe).resolve().parent), "arguments": ""}
+    return {
+        "target": _pythonw(sys.executable),
+        "workdir": str(Path.cwd()),
+        "arguments": _module_args(tray),
+    }
+
+
+def _windows_shortcut_script(lnk_path: str, target: str, workdir: str, arguments: str) -> str:
+    """PowerShell that creates a Startup shortcut launching ``target``.
+
+    Targets the exe (or pythonw.exe) directly — no console window, no wscript
+    host — with ``workdir`` as the working directory. WindowStyle 7 = minimized.
+    The shortcut's file name (without `.lnk`) is what Task Manager's Startup tab
+    displays.
     """
     return (
         "$s = (New-Object -ComObject WScript.Shell)."
         f"CreateShortcut('{lnk_path}'); "
-        f"$s.TargetPath = '{python_exe}'; "
-        f"$s.Arguments = '{_module_args(tray)}'; "
+        f"$s.TargetPath = '{target}'; "
+        f"$s.Arguments = '{arguments}'; "
         f"$s.WorkingDirectory = '{workdir}'; "
         "$s.WindowStyle = 7; "
         f"$s.Description = '{WINDOWS_DISPLAY_NAME}'; "
@@ -170,7 +186,10 @@ def install(tray: bool = False) -> None:
         startup.mkdir(parents=True, exist_ok=True)
         (startup / _LEGACY_VBS_NAME).unlink(missing_ok=True)  # remove old .vbs entry
         lnk_path = startup / f"{WINDOWS_DISPLAY_NAME}.lnk"
-        script = _windows_shortcut_script(str(lnk_path), python_exe, workdir, tray)
+        plan = _launch_plan(tray)
+        script = _windows_shortcut_script(
+            str(lnk_path), plan["target"], plan["workdir"], plan["arguments"]
+        )
         _run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script])
         print(f"Installed startup shortcut at {lnk_path}.")
     elif platform == "darwin":

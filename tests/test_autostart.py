@@ -13,12 +13,43 @@ def test_windows_shortcut_script_sets_target_args_and_workdir():
         r"C:\startup\Spotify Perpetual.lnk",
         r"C:\repo\.venv\Scripts\pythonw.exe",
         r"C:\repo",
+        "-m idle_player",
     )
     assert r"C:\startup\Spotify Perpetual.lnk" in script
     assert r"C:\repo\.venv\Scripts\pythonw.exe" in script  # TargetPath
-    assert "-m idle_player" in script  # Arguments
+    assert "$s.Arguments = '-m idle_player'" in script
     assert r"C:\repo" in script  # WorkingDirectory
     assert "CreateShortcut" in script
+
+
+def test_windows_shortcut_script_targets_exe_with_no_args():
+    script = autostart._windows_shortcut_script(
+        r"C:\startup\Spotify Perpetual.lnk",
+        r"C:\app\Spotify Perpetual.exe",
+        r"C:\app",
+        "",
+    )
+    assert r"C:\app\Spotify Perpetual.exe" in script  # TargetPath = the exe
+    assert "$s.Arguments = ''" in script  # no args -> open-and-run -> tray
+
+
+def test_launch_plan_source_mode(monkeypatch):
+    monkeypatch.setattr(autostart.sys, "frozen", False, raising=False)
+    assert autostart._launch_plan(False)["arguments"] == "-m idle_player"
+    assert autostart._launch_plan(True)["arguments"] == "-m idle_player tray"
+
+
+def test_launch_plan_frozen_targets_exe(monkeypatch, tmp_path):
+    exe = tmp_path / "Spotify Perpetual.exe"
+    exe.write_text("")
+    monkeypatch.setattr(autostart.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(autostart.sys, "executable", str(exe))
+
+    plan = autostart._launch_plan(tray=True)  # tray flag irrelevant when frozen
+
+    assert plan["target"] == str(exe)
+    assert plan["arguments"] == ""  # exe with no args = open-and-run
+    assert plan["workdir"] == str(tmp_path)
 
 
 def test_macos_plist_has_paths_trigger_and_module():
@@ -44,11 +75,9 @@ def test_module_args_tray_vs_plain():
     assert autostart._module_args(True) == "-m idle_player tray"
 
 
-def test_windows_shortcut_tray_arguments():
-    plain = autostart._windows_shortcut_script(r"C:\x.lnk", r"C:\py.exe", r"C:\repo")
-    tray = autostart._windows_shortcut_script(r"C:\x.lnk", r"C:\py.exe", r"C:\repo", tray=True)
-    assert "'-m idle_player'" in plain
-    assert "'-m idle_player tray'" in tray
+def test_windows_shortcut_passes_tray_arguments_through():
+    tray = autostart._windows_shortcut_script(r"C:\x.lnk", r"C:\py.exe", r"C:\repo", "-m idle_player tray")
+    assert "$s.Arguments = '-m idle_player tray'" in tray
 
 
 def test_linux_unit_tray_execstart():
