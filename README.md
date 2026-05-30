@@ -146,6 +146,26 @@ idle-player tray
 
 The polling loop runs in the background; the icon just controls and reports it.
 
+## Standalone executable (Windows)
+
+Build a single branded `Spotify Perpetual.exe` (no Python needed to run it):
+
+```powershell
+.\packaging\build_windows.ps1        # outputs dist\Spotify Perpetual.exe
+```
+
+The exe is windowed: double-clicking (or autostart) launches the tray. For the
+one-time setup, run the interactive commands from a terminal — a console window
+opens for them:
+
+```powershell
+& '.\dist\Spotify Perpetual.exe' setup
+& '.\dist\Spotify Perpetual.exe' auth
+```
+
+Because it carries real version info, Task Manager's Startup tab shows
+"Spotify Perpetual" rather than "python", and it runs as a single process.
+
 ## Running at startup
 
 From the repo root, in the same environment where you installed the package,
