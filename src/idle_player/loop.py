@@ -135,7 +135,9 @@ def run_once(config: Config, sp, logger: logging.Logger, rotator=None) -> str:
     if config.resume_paused_track and is_paused_with_track(playback):
         ensure_running(config.launch_wait_seconds)
         device_id = pick_device(sp, config.preferred_device_name)
-        if resume_playback(sp, device_id):
+        if resume_playback(
+            sp, device_id, volume=config.volume, fade_in_seconds=config.fade_in_seconds
+        ):
             logger.info("resumed paused track on device %s", device_id)
             return "resumed"
         logger.info("could not resume paused track; falling back to playlist")
@@ -144,7 +146,13 @@ def run_once(config: Config, sp, logger: logging.Logger, rotator=None) -> str:
 
     def _start(device_id):
         return start_playlist(
-            sp, playlist_uri, device_id, shuffle=config.shuffle, repeat=config.repeat
+            sp,
+            playlist_uri,
+            device_id,
+            shuffle=config.shuffle,
+            repeat=config.repeat,
+            volume=config.volume,
+            fade_in_seconds=config.fade_in_seconds,
         )
 
     # Idle: make sure Spotify is up, pick a device, start the playlist.

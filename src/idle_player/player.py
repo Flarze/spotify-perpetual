@@ -12,6 +12,7 @@ buried assumption.
 from __future__ import annotations
 
 import random
+import time
 from typing import List, Optional, Sequence
 
 from spotipy.exceptions import SpotifyException
@@ -133,6 +134,8 @@ def start_playlist(
     device_id: Optional[str] = None,
     shuffle: bool = False,
     repeat: str = "off",
+    volume: Optional[int] = None,
+    fade_in_seconds: int = 0,
 ) -> bool:
     """Start the playlist; return whether playback was started.
 
@@ -157,19 +160,25 @@ def start_playlist(
         raise
 
     _apply_modes(sp, device_id, shuffle, repeat)
+    _apply_volume(sp, device_id, volume, fade_in_seconds)
     return True
 
 
-def resume_playback(sp, device_id: Optional[str] = None) -> bool:
+def resume_playback(
+    sp,
+    device_id: Optional[str] = None,
+    volume: Optional[int] = None,
+    fade_in_seconds: int = 0,
+) -> bool:
     """Resume the current (paused) track without changing the context.
 
     Returns True on success. A "no active device" 404 returns False so the
     caller can fall back to starting a playlist. A Premium-required 403 raises
-    PremiumRequiredError. Any other error propagates.
+    PremiumRequiredError. Any other error propagates. Volume/fade are applied
+    after a successful resume (best-effort).
     """
     try:
         sp.start_playback(device_id=device_id)
-        return True
     except SpotifyException as exc:
         if exc.http_status == 404:
             return False
@@ -180,6 +189,9 @@ def resume_playback(sp, device_id: Optional[str] = None) -> bool:
             ) from exc
         raise
 
+    _apply_volume(sp, device_id, volume, fade_in_seconds)
+    return True
+
 
 def _apply_modes(sp, device_id, shuffle: bool, repeat: str) -> None:
     """Set shuffle and repeat after playback starts. Best-effort: never raises."""
@@ -188,4 +200,35 @@ def _apply_modes(sp, device_id, shuffle: bool, repeat: str) -> None:
         sp.repeat(repeat, device_id=device_id)
     except SpotifyException:
         # Playback already started; these toggles are non-critical extras.
+        pass
+
+
+def _apply_volume(
+    sp,
+    device_id,
+    volume: Optional[int],
+    fade_in_seconds: int,
+    sleep=time.sleep,
+) -> None:
+    """Set volume (optionally fading in) after playback starts. Best-effort.
+
+    Does nothing when there is no target volume and no fade. With a fade the
+    volume ramps from 0 up to the target (``volume``, or 100 if only a fade is
+    configured) over ``fade_in_seconds``. Never raises: volume control is a
+    non-critical extra and requires Premium + an active device.
+    """
+    if volume is None and fade_in_seconds <= 0:
+        return
+    target = 100 if volume is None else volume
+    try:
+        if fade_in_seconds > 0:
+            steps = max(1, min(fade_in_seconds, 20))
+            sp.volume(0, device_id=device_id)
+            for i in range(1, steps + 1):
+                sp.volume(round(target * i / steps), device_id=device_id)
+                if i < steps:
+                    sleep(fade_in_seconds / steps)
+        else:
+            sp.volume(target, device_id=device_id)
+    except SpotifyException:
         pass

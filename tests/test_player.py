@@ -11,6 +11,7 @@ from spotipy.exceptions import SpotifyException
 from idle_player.player import (
     PlaylistRotator,
     PremiumRequiredError,
+    _apply_volume,
     get_playback,
     is_paused_with_track,
     pick_device,
@@ -30,6 +31,7 @@ class FakeSpotify:
         self.start_calls = []
         self.shuffle_calls = []
         self.repeat_calls = []
+        self.volume_calls = []
 
     def current_playback(self):
         return self._playback
@@ -47,6 +49,9 @@ class FakeSpotify:
 
     def repeat(self, state, device_id=None):
         self.repeat_calls.append({"state": state, "device_id": device_id})
+
+    def volume(self, volume_percent, device_id=None):
+        self.volume_calls.append({"volume": volume_percent, "device_id": device_id})
 
 
 def test_nothing_playing_no_device_starts():
@@ -76,6 +81,51 @@ def test_idle_active_device_no_item_starts_regardless_of_flag():
     playback = {"is_playing": False, "item": None}
     assert should_start_playback(playback, paused_counts_as_playing=True) is True
     assert should_start_playback(playback, paused_counts_as_playing=False) is True
+
+
+# --- volume / fade-in -----------------------------------------------------
+
+
+def test_start_playlist_sets_volume():
+    sp = FakeSpotify()
+    start_playlist(sp, "spotify:playlist:x", device_id="d1", volume=40)
+    assert sp.volume_calls == [{"volume": 40, "device_id": "d1"}]
+
+
+def test_start_playlist_no_volume_call_when_unset():
+    sp = FakeSpotify()
+    start_playlist(sp, "spotify:playlist:x", device_id="d1")
+    assert sp.volume_calls == []
+
+
+def test_resume_playback_sets_volume():
+    sp = FakeSpotify()
+    resume_playback(sp, "d1", volume=30)
+    assert sp.volume_calls == [{"volume": 30, "device_id": "d1"}]
+
+
+def test_apply_volume_noop_when_unset():
+    sp = FakeSpotify()
+    _apply_volume(sp, "d1", None, 0)
+    assert sp.volume_calls == []
+
+
+def test_apply_volume_fade_ramps_to_target():
+    sp = FakeSpotify()
+    slept = []
+    _apply_volume(sp, "d1", volume=100, fade_in_seconds=4, sleep=lambda s: slept.append(s))
+
+    vols = [c["volume"] for c in sp.volume_calls]
+    assert vols[0] == 0          # starts muted
+    assert vols[-1] == 100       # ends at target
+    assert vols == sorted(vols)  # monotonic ramp up
+    assert len(slept) == len(vols) - 2  # sleeps only between ramp steps
+
+
+def test_apply_volume_fade_defaults_target_to_100():
+    sp = FakeSpotify()
+    _apply_volume(sp, "d1", volume=None, fade_in_seconds=2, sleep=lambda s: None)
+    assert sp.volume_calls[-1]["volume"] == 100
 
 
 # --- is_paused_with_track -------------------------------------------------

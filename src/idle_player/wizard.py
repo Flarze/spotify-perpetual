@@ -63,6 +63,22 @@ def _prompt_choice(input_fn, label: str, choices, default: str, output=print) ->
         output(f"  choose one of: {options}")
 
 
+def _prompt_opt_int(input_fn, label: str, lo: int, hi: int, output=print):
+    """Prompt for an int in [lo, hi], or None when left blank."""
+    while True:
+        value = input_fn(f"{label}: ").strip()
+        if not value:
+            return None
+        try:
+            number = int(value)
+        except ValueError:
+            output("  enter a whole number, or leave blank")
+            continue
+        if lo <= number <= hi:
+            return number
+        output(f"  enter a number between {lo} and {hi}, or leave blank")
+
+
 def _prompt_int(input_fn, label: str, default: int, output=print) -> int:
     while True:
         value = input_fn(f"{label} (default: {default}): ").strip()
@@ -93,6 +109,11 @@ def _prompt_playlists(input_fn, output=print) -> list:
 def _render_config(values: dict) -> str:
     """Render config.yaml text from collected values (commented, human-readable)."""
     playlists_line = ", ".join(values["playlists"])
+    volume = values.get("volume")
+    volume_line = (
+        f"volume: {volume}" if volume is not None
+        else "# volume: 60                # 0-100; unset = leave device volume alone"
+    )
     return f"""\
 # Written by `idle-player setup`. This file holds your client secret -- it is a
 # SECRET and is gitignored. Re-run `idle-player setup` to change these.
@@ -106,6 +127,8 @@ playlists: "{playlists_line}"
 playlist_selection: {values['playlist_selection']}   # rotate | random
 shuffle: {str(values['shuffle']).lower()}
 repeat: "{values['repeat']}"                # off | context | track
+{volume_line}
+fade_in_seconds: {values['fade_in_seconds']}          # >0 ramps volume up on start/resume
 
 poll_interval: {values['poll_interval']}
 
@@ -151,6 +174,10 @@ def run_setup(
     )
     shuffle = _prompt_bool(input_fn, "Shuffle on start?", False, output)
     repeat = _prompt_choice(input_fn, "Repeat", ("off", "context", "track"), "off", output)
+    volume = _prompt_opt_int(
+        input_fn, "Set volume on start (0-100, blank = leave unchanged)", 0, 100, output
+    )
+    fade_in_seconds = _prompt_int(input_fn, "Fade-in seconds (0 = off)", 0, output)
     resume_on_pause = _prompt_bool(input_fn, "Auto-resume when you pause playback?", True, output)
     resume_track = (
         _prompt_bool(input_fn, "  Resume the same track (not a new playlist)?", False, output)
@@ -167,6 +194,8 @@ def run_setup(
         "playlist_selection": selection,
         "shuffle": shuffle,
         "repeat": repeat,
+        "volume": volume,
+        "fade_in_seconds": fade_in_seconds,
         "poll_interval": poll_interval,
         "paused_counts_as_playing": not resume_on_pause,
         "resume_paused_track": resume_track,

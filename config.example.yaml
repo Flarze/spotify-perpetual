@@ -23,6 +23,9 @@ playlist_selection: rotate   # with several: rotate (cycle in order) | random
 shuffle: false               # shuffle the playlist when starting
 repeat: "off"                # off | context (loop the playlist) | track (loop one song)
 
+# volume: 60                 # 0-100; leave unset to keep the device's volume
+fade_in_seconds: 0           # >0 ramps volume from 0 up to target on start/resume
+
 poll_interval: 30            # seconds between playback checks
 token_cache_path: .cache     # where the OAuth token cache is stored (SECRET)
 

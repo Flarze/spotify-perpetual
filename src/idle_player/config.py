@@ -29,6 +29,8 @@ class Config:
     playlist_selection: str = "rotate"  # "rotate" | "random"
     shuffle: bool = False
     repeat: str = "off"  # "off" | "context" | "track"
+    volume: Optional[int] = None  # 0-100, or None to leave device volume alone
+    fade_in_seconds: int = 0  # >0 ramps volume up to target on start/resume
     poll_interval: int = 30
     token_cache_path: str = ".cache"
     paused_counts_as_playing: bool = True
@@ -103,6 +105,16 @@ def _resolve_playlists(values: dict) -> list:
     return []
 
 
+def _to_opt_int(value) -> Optional[int]:
+    """Parse an int, or None for an unset/blank value (distinct from 0)."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return int(text)
+
+
 def _to_bool(value) -> bool:
     if isinstance(value, bool):
         return value
@@ -156,6 +168,8 @@ def load_config(
         "redirect_uri": env.get("SPOTIFY_REDIRECT_URI"),
         "playlists": env.get("PLAYLISTS"),
         "playlist_uri": env.get("PLAYLIST_URI"),
+        "volume": env.get("VOLUME"),
+        "fade_in_seconds": env.get("FADE_IN_SECONDS"),
         "poll_interval": env.get("POLL_INTERVAL"),
         "token_cache_path": env.get("TOKEN_CACHE_PATH"),
         "paused_counts_as_playing": env.get("PAUSED_COUNTS_AS_PLAYING"),
@@ -200,6 +214,10 @@ def load_config(
     if repeat not in _VALID_REPEAT:
         raise ValueError(f"Invalid repeat {repeat!r}; expected one of {_VALID_REPEAT}.")
 
+    volume = _to_opt_int(values.get("volume"))
+    if volume is not None and not (0 <= volume <= 100):
+        raise ValueError(f"Invalid volume {volume}; expected 0-100 (or blank to leave unchanged).")
+
     defaults = Config(client_id="", client_secret="", redirect_uri="", playlist_uri="")
     return Config(
         client_id=values["client_id"],
@@ -214,6 +232,8 @@ def load_config(
             else defaults.shuffle
         ),
         repeat=repeat,
+        volume=volume,
+        fade_in_seconds=_to_int(values.get("fade_in_seconds"), defaults.fade_in_seconds),
         poll_interval=_to_int(values.get("poll_interval"), defaults.poll_interval),
         token_cache_path=values["token_cache_path"] or defaults.token_cache_path,
         paused_counts_as_playing=(
@@ -257,6 +277,8 @@ def _merge_yaml(values: dict, data: dict) -> None:
         "playlist_selection",
         "shuffle",
         "repeat",
+        "volume",
+        "fade_in_seconds",
         "poll_interval",
         "paused_counts_as_playing",
         "resume_paused_track",

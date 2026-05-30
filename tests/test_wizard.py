@@ -43,6 +43,8 @@ def test_setup_writes_valid_multi_playlist_config(tmp_path):
         "random",                                       # selection (>1 playlist)
         "y",                                            # shuffle
         "context",                                      # repeat
+        "70",                                           # volume
+        "",                                             # fade-in -> default 0
         "y",                                            # auto-resume on pause
         "n",                                            # resume same track?
         "45",                                           # poll interval
@@ -59,6 +61,8 @@ def test_setup_writes_valid_multi_playlist_config(tmp_path):
     assert data["playlist_selection"] == "random"
     assert data["shuffle"] is True
     assert data["repeat"] == "context"
+    assert data["volume"] == 70
+    assert data["fade_in_seconds"] == 0
     assert data["poll_interval"] == 45
     assert data["paused_counts_as_playing"] is False  # auto-resume => false
     assert data["resume_paused_track"] is False
@@ -82,6 +86,8 @@ def test_setup_single_playlist_skips_selection_prompt(tmp_path):
         "",                             # finish playlists
         "",                             # shuffle -> default False
         "",                             # repeat -> default off
+        "",                             # volume -> blank (unset)
+        "",                             # fade-in -> default 0
         "n",                            # auto-resume on pause -> False
         "",                             # poll interval -> default 30
     ]
@@ -93,6 +99,8 @@ def test_setup_single_playlist_skips_selection_prompt(tmp_path):
     assert data["playlist_selection"] == "rotate"
     assert data["shuffle"] is False
     assert data["repeat"] == "off"
+    assert "volume" not in data  # blank volume -> key left out (commented)
+    assert data["fade_in_seconds"] == 0
     assert data["poll_interval"] == 30
     assert data["paused_counts_as_playing"] is True   # declined auto-resume
     assert data["resume_paused_track"] is False
@@ -100,7 +108,7 @@ def test_setup_single_playlist_skips_selection_prompt(tmp_path):
 
 def test_setup_requires_nonempty_secret(tmp_path):
     # Secret is empty first, then provided; wizard must re-ask, not accept blank.
-    answers = ["cid", "", "spotify:playlist:a", "", "", "", "n", ""]
+    answers = ["cid", "", "spotify:playlist:a", "", "", "", "", "", "n", ""]
     out = []
     rc = run_setup(
         config_path=str(tmp_path / "config.yaml"),
@@ -115,7 +123,7 @@ def test_setup_requires_nonempty_secret(tmp_path):
 
 def test_setup_bool_reasks_on_garbage(tmp_path):
     # "maybe" is not yes/no -> re-ask; then "y" -> True.
-    answers = ["cid", "", "spotify:playlist:a", "", "maybe", "y", "", "n", ""]
+    answers = ["cid", "", "spotify:playlist:a", "", "maybe", "y", "", "", "", "n", ""]
     out = []
     rc = run_setup(
         config_path=str(tmp_path / "config.yaml"),
@@ -130,9 +138,9 @@ def test_setup_bool_reasks_on_garbage(tmp_path):
 
 def test_setup_blank_applies_all_defaults(tmp_path):
     # One playlist given; every optional answer left blank -> documented defaults.
-    # Order: id, redirect, playlist, finish, shuffle, repeat, auto-resume,
-    # resume-track (asked because auto-resume defaults yes), poll.
-    answers = ["cid", "", "spotify:playlist:a", "", "", "", "", "", ""]
+    # Order: id, redirect, playlist, finish, shuffle, repeat, volume, fade,
+    # auto-resume, resume-track (asked because auto-resume defaults yes), poll.
+    answers = ["cid", "", "spotify:playlist:a", "", "", "", "", "", "", "", ""]
     out = []
     rc = run_setup(
         config_path=str(tmp_path / "config.yaml"),

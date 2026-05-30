@@ -204,6 +204,33 @@ def test_yaml_overrides_backoff(tmp_path):
     assert config.backoff_max_seconds == 120
 
 
+def test_volume_and_fade_defaults(tmp_path):
+    config = load_config(env_path=write_env(tmp_path / ".env"))
+    assert config.volume is None  # unset = leave device volume alone
+    assert config.fade_in_seconds == 0
+
+
+def test_volume_and_fade_from_yaml(tmp_path):
+    env = write_env(tmp_path / ".env")
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text("volume: 55\nfade_in_seconds: 3\n")
+    config = load_config(env_path=env, yaml_path=yaml_path)
+    assert config.volume == 55
+    assert config.fade_in_seconds == 3
+
+
+def test_volume_blank_stays_none(tmp_path):
+    env = write_env(tmp_path / ".env", VOLUME="")
+    assert load_config(env_path=env).volume is None
+
+
+def test_invalid_volume_raises(tmp_path):
+    env = write_env(tmp_path / ".env", VOLUME="150")
+    with pytest.raises(ValueError) as exc:
+        load_config(env_path=env)
+    assert "volume" in str(exc.value).lower()
+
+
 def test_resume_paused_track_defaults_false(tmp_path):
     config = load_config(env_path=write_env(tmp_path / ".env"))
     assert config.resume_paused_track is False

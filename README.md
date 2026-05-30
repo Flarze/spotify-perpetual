@@ -70,6 +70,8 @@ Prefer to edit files yourself? Copy the template and fill in your values:
    | `POLL_INTERVAL` | Seconds between checks (default `30`) |
    | `PAUSED_COUNTS_AS_PLAYING` | If `true`, a paused track is treated as "listening" and won't trigger a restart |
    | `RESUME_PAUSED_TRACK` | If `true` (and `PAUSED_COUNTS_AS_PLAYING=false`), resume the paused track instead of starting a fresh playlist. Default `false` |
+   | `VOLUME` | Set volume `0`–`100` on start/resume; blank leaves the device volume unchanged |
+   | `FADE_IN_SECONDS` | Ramp volume up over this many seconds on start/resume (`0` = off) |
 
 ### Multiple playlists, shuffle, and repeat
 

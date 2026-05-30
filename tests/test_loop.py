@@ -57,6 +57,9 @@ class FakeSpotify:
     def repeat(self, state, device_id=None):
         pass
 
+    def volume(self, volume_percent, device_id=None):
+        pass
+
 
 def stub_ensure_running(monkeypatch):
     calls = []
