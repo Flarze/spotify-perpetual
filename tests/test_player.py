@@ -18,6 +18,7 @@ from idle_player.player import (
     resume_playback,
     should_start_playback,
     start_playlist,
+    track_label,
 )
 
 
@@ -126,6 +127,23 @@ def test_apply_volume_fade_defaults_target_to_100():
     sp = FakeSpotify()
     _apply_volume(sp, "d1", volume=None, fade_in_seconds=2, sleep=lambda s: None)
     assert sp.volume_calls[-1]["volume"] == 100
+
+
+# --- track_label ----------------------------------------------------------
+
+
+def test_track_label_name_and_artist():
+    pb = {"item": {"name": "Song", "artists": [{"name": "A"}, {"name": "B"}]}}
+    assert track_label(pb) == "Song — A, B"
+
+
+def test_track_label_name_only_when_no_artists():
+    assert track_label({"item": {"name": "Song", "artists": []}}) == "Song"
+
+
+def test_track_label_none_when_no_item():
+    assert track_label({"item": None}) is None
+    assert track_label(None) is None
 
 
 # --- is_paused_with_track -------------------------------------------------

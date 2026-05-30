@@ -395,23 +395,61 @@ def test_run_with_controller_skips_run_once_when_paused(tmp_path, monkeypatch):
     assert ctrl.status() == "paused (watcher off)"
 
 
-def test_run_with_controller_updates_status_from_action(tmp_path, monkeypatch):
+def test_run_passes_controller_into_run_once(tmp_path, monkeypatch):
     from idle_player.control import Controller
 
     config = make_config(tmp_path)
     ctrl = Controller()
-    monkeypatch.setattr(loop, "run_once", lambda *a: "started")
+    seen = {}
+
+    def fake_run_once(cfg, sp, logger, rotator=None, controller=None):
+        seen["controller"] = controller
+        controller.set_status("watching — started playlist")
+        return "started"
+
+    monkeypatch.setattr(loop, "run_once", fake_run_once)
     monkeypatch.setattr(loop, "_sleep", lambda delay, c: c.stop() or True)
 
     loop.run(config, object(), ctrl)
 
+    assert seen["controller"] is ctrl
     assert ctrl.status() == "watching — started playlist"
+
+
+def test_run_once_sets_status_with_track_when_playing(tmp_path, monkeypatch):
+    from idle_player.control import Controller
+
+    stub_ensure_running(monkeypatch)
+    ctrl = Controller()
+    sp = FakeSpotify(
+        playback={
+            "is_playing": True,
+            "item": {"name": "Song", "artists": [{"name": "Artist"}]},
+        }
+    )
+
+    result = loop.run_once(make_config(tmp_path), sp, logging.getLogger("test"), None, ctrl)
+
+    assert result == "skip"
+    assert ctrl.status() == "playing: Song — Artist"
+
+
+def test_run_once_sets_status_on_start(tmp_path, monkeypatch):
+    from idle_player.control import Controller
+
+    stub_ensure_running(monkeypatch)
+    ctrl = Controller()
+    sp = FakeSpotify(playback=None, devices=[{"id": "d1", "name": "L", "is_active": True}])
+
+    loop.run_once(make_config(tmp_path), sp, logging.getLogger("test"), None, ctrl)
+
+    assert ctrl.status() == "started playlist"
 
 
 def test_run_stops_on_premium_required_without_sleeping(tmp_path, monkeypatch):
     config = make_config(tmp_path)
 
-    def boom(cfg, sp, logger, rotator=None):
+    def boom(cfg, sp, logger, rotator=None, controller=None):
         raise PremiumRequiredError("needs premium")
 
     slept = []

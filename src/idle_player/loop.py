@@ -25,6 +25,7 @@ from .player import (
     resume_playback,
     should_start_playback,
     start_playlist,
+    track_label,
 )
 from .spotify_process import ensure_running
 
@@ -113,7 +114,7 @@ def setup_logging(config: Config) -> logging.Logger:
     return logger
 
 
-def run_once(config: Config, sp, logger: logging.Logger, rotator=None) -> str:
+def run_once(config: Config, sp, logger: logging.Logger, rotator=None, controller=None) -> str:
     """Run one decide-and-act cycle. Returns the action taken.
 
     Returns one of: "skip" (already playing), "resumed" (continued a paused
@@ -123,11 +124,19 @@ def run_once(config: Config, sp, logger: logging.Logger, rotator=None) -> str:
     ``rotator`` chooses which playlist to start; without one the first
     configured playlist is used. The playlist is chosen once per cycle so the
     404 retry reuses the same selection (rotation advances per start, not per
-    attempt).
+    attempt). ``controller`` (optional) gets a human-readable status, including
+    the current track name where known.
     """
+
+    def _status(msg: str) -> None:
+        if controller is not None:
+            controller.set_status(msg)
+
     playback = get_playback(sp)
+    label = track_label(playback)
     if not should_start_playback(playback, config.paused_counts_as_playing):
         logger.info("playback active, nothing to do")
+        _status(f"playing: {label}" if label else "music playing")
         return "skip"
 
     # If configured, resume a paused track in place rather than starting a fresh
@@ -139,6 +148,7 @@ def run_once(config: Config, sp, logger: logging.Logger, rotator=None) -> str:
             sp, device_id, volume=config.volume, fade_in_seconds=config.fade_in_seconds
         ):
             logger.info("resumed paused track on device %s", device_id)
+            _status(f"resumed: {label}" if label else "resumed paused track")
             return "resumed"
         logger.info("could not resume paused track; falling back to playlist")
 
@@ -160,6 +170,7 @@ def run_once(config: Config, sp, logger: logging.Logger, rotator=None) -> str:
     device_id = pick_device(sp, config.preferred_device_name)
     if _start(device_id):
         logger.info("started %s on device %s", playlist_uri, device_id)
+        _status("started playlist")
         return "started"
 
     # "No active device" 404: launch (if needed) and retry once.
@@ -168,9 +179,11 @@ def run_once(config: Config, sp, logger: logging.Logger, rotator=None) -> str:
     device_id = pick_device(sp, config.preferred_device_name)
     if _start(device_id):
         logger.info("started %s on device %s after relaunch", playlist_uri, device_id)
+        _status("started playlist")
         return "started"
 
     logger.warning("no active device after retry; will try again next poll")
+    _status("no Connect device")
     return "no_device"
 
 
@@ -228,14 +241,6 @@ def maybe_reload(config, sp, rotator, mtimes, logger, load=load_config, build=bu
     return new_config, sp, rotator, current, True
 
 
-_STATUS_FOR_ACTION = {
-    "skip": "watching — music playing",
-    "started": "watching — started playlist",
-    "resumed": "watching — resumed paused track",
-    "no_device": "watching — no Connect device",
-}
-
-
 def _sleep(delay, controller) -> bool:
     """Sleep for ``delay``. Return True if the loop should stop.
 
@@ -289,10 +294,8 @@ def run(config: Config, sp, controller=None) -> None:
             continue
 
         try:
-            action = run_once(config, sp, logger, rotator)
+            run_once(config, sp, logger, rotator, controller)
             failures = 0  # recovered: drop back to normal cadence
-            if controller is not None:
-                controller.set_status(_STATUS_FOR_ACTION.get(action, "watching"))
         except KeyboardInterrupt:
             logger.info("interrupted; shutting down")
             break

@@ -86,6 +86,17 @@ def should_start_playback(
     return not paused_counts_as_playing
 
 
+def track_label(playback: Optional[dict]) -> Optional[str]:
+    """Return "Song — Artist" for the current item, or None if unavailable."""
+    item = (playback or {}).get("item") or {}
+    name = item.get("name")
+    if not name:
+        return None
+    artists = item.get("artists") or []
+    who = ", ".join(a.get("name", "") for a in artists if a.get("name"))
+    return f"{name} — {who}" if who else name
+
+
 def is_paused_with_track(playback: Optional[dict]) -> bool:
     """True if a track is loaded but paused (vs. truly idle / no device)."""
     return (
