@@ -34,6 +34,7 @@ def launch(
     health=token_health,
     tray=run_tray,
     output=print,
+    gui_error=None,
 ) -> int:
     """Set up + authorize as needed, then run the tray. Returns an exit code.
 
@@ -64,5 +65,31 @@ def launch(
             output("Authorizing with Spotify (a browser window will open)...")
             console_auth(config, open_browser=True)
 
+        # Cancelled or failed login leaves no usable token. Surface it and stop
+        # rather than falling through to a tray that exits silently (no console).
+        if health(config) != TOKEN_OK:
+            if has_gui():
+                (gui_error or _gui_error)(
+                    "Not connected",
+                    "Spotify was not connected, so there's nothing to run.\n"
+                    "Re-launch to try again.",
+                )
+            else:
+                output("Spotify was not connected; nothing to run.")
+            return 1
+
     # 3. Everything ready — run the tray.
     return tray()
+
+
+def _gui_error(title: str, message: str) -> None:
+    """Show an error dialog; no-op if Tk cannot be loaded."""
+    try:
+        from tkinter import Tk, messagebox
+
+        root = Tk()
+        root.withdraw()
+        messagebox.showerror(title, message)
+        root.destroy()
+    except Exception:  # noqa: BLE001 - best-effort; never crash the launcher
+        pass
