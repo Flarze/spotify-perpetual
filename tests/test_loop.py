@@ -31,12 +31,15 @@ def make_config(tmp_path, **overrides):
 
 
 class FakeSpotify:
-    def __init__(self, playback=None, devices=None, start_errors=None):
+    def __init__(self, playback=None, devices=None, start_errors=None, transfer_errors=None):
         self._playback = playback
         self._devices = devices or []
         # start_errors: list of exceptions/None applied per start_playback call.
         self._start_errors = list(start_errors or [])
+        # transfer_errors: same, per transfer_playback call (resume path).
+        self._transfer_errors = list(transfer_errors or [])
         self.start_calls = []
+        self.transfer_calls = []
 
     def current_playback(self):
         return self._playback
@@ -48,6 +51,13 @@ class FakeSpotify:
         self.start_calls.append({"context_uri": context_uri, "device_id": device_id})
         if self._start_errors:
             err = self._start_errors.pop(0)
+            if err is not None:
+                raise err
+
+    def transfer_playback(self, device_id, force_play=True):
+        self.transfer_calls.append({"device_id": device_id, "force_play": force_play})
+        if self._transfer_errors:
+            err = self._transfer_errors.pop(0)
             if err is not None:
                 raise err
 
@@ -167,8 +177,9 @@ def test_run_once_resumes_paused_track_when_enabled(tmp_path, monkeypatch):
     result = loop.run_once(config, sp, logging.getLogger("test"), rotator)
 
     assert result == "resumed"
-    # Resume = start_playback with no context_uri; rotation untouched.
-    assert sp.start_calls == [{"context_uri": None, "device_id": "d1"}]
+    # Resume = transfer_playback to the device; no fresh playlist start; rotation untouched.
+    assert sp.transfer_calls == [{"device_id": "d1", "force_play": True}]
+    assert sp.start_calls == []
     assert rotator.next() == "spotify:playlist:a"  # not advanced by the resume
 
 
@@ -192,15 +203,16 @@ def test_run_once_resume_falls_back_to_playlist_on_404(tmp_path, monkeypatch):
     sp = FakeSpotify(
         playback={"is_playing": False, "item": {"uri": "track:x"}},
         devices=[{"id": "d1", "name": "L", "is_active": True}],
-        start_errors=[err404, None],  # resume attempt 404s, playlist start works
+        transfer_errors=[err404],  # resume (transfer) attempt 404s
+        start_errors=[None],       # then playlist start works
     )
     config = make_config(tmp_path, paused_counts_as_playing=False, resume_paused_track=True)
 
     result = loop.run_once(config, sp, logging.getLogger("test"))
 
     assert result == "started"
-    assert sp.start_calls[0]["context_uri"] is None  # resume tried first
-    assert sp.start_calls[1]["context_uri"] == config.playlists()[0]  # then playlist
+    assert sp.transfer_calls[0]["device_id"] == "d1"  # resume tried first
+    assert sp.start_calls[0]["context_uri"] == config.playlists()[0]  # then playlist
 
 
 def test_run_once_relaunches_and_retries_on_404(tmp_path, monkeypatch):

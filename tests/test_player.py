@@ -30,6 +30,7 @@ class FakeSpotify:
         self._devices = devices or []
         self._start_error = start_error
         self.start_calls = []
+        self.transfer_calls = []
         self.shuffle_calls = []
         self.repeat_calls = []
         self.volume_calls = []
@@ -42,6 +43,11 @@ class FakeSpotify:
 
     def start_playback(self, context_uri=None, device_id=None):
         self.start_calls.append({"context_uri": context_uri, "device_id": device_id})
+        if self._start_error is not None:
+            raise self._start_error
+
+    def transfer_playback(self, device_id, force_play=True):
+        self.transfer_calls.append({"device_id": device_id, "force_play": force_play})
         if self._start_error is not None:
             raise self._start_error
 
@@ -159,10 +165,11 @@ def test_is_paused_with_track():
 # --- resume_playback ------------------------------------------------------
 
 
-def test_resume_playback_resumes_without_context():
+def test_resume_playback_transfers_to_device():
     sp = FakeSpotify()
     assert resume_playback(sp, device_id="d1") is True
-    assert sp.start_calls == [{"context_uri": None, "device_id": "d1"}]
+    assert sp.transfer_calls == [{"device_id": "d1", "force_play": True}]
+    assert sp.start_calls == []
 
 
 def test_resume_playback_404_returns_false():

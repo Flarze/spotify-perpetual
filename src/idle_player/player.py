@@ -183,13 +183,19 @@ def resume_playback(
 ) -> bool:
     """Resume the current (paused) track without changing the context.
 
+    Uses transfer_playback (not start_playback) so a session paused on another
+    device — e.g. a phone — is moved to ``device_id`` and resumed there. Calling
+    start_playback with a device_id that does not already own the session gets a
+    403 "Restriction violated"; transfer_playback with force_play=True is the
+    supported way to hand the active session to another Connect device.
+
     Returns True on success. A "no active device" 404 returns False so the
     caller can fall back to starting a playlist. A Premium-required 403 raises
     PremiumRequiredError. Any other error propagates. Volume/fade are applied
     after a successful resume (best-effort).
     """
     try:
-        sp.start_playback(device_id=device_id)
+        sp.transfer_playback(device_id, force_play=True)
     except SpotifyException as exc:
         if exc.http_status == 404:
             return False
