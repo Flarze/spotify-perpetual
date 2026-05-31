@@ -71,11 +71,25 @@ def test_launch_aborts_if_gui_setup_cancelled():
     assert calls == []  # never auths or starts the tray
 
 
+def _health_then_ok(states):
+    """A health() that yields each state in turn (INVALID before auth, OK after)."""
+    it = iter(states)
+
+    def health(_config):
+        return next(it)
+
+    return health
+
+
 def test_launch_runs_gui_auth_when_token_not_ok():
     calls = []
     rc = bootstrap.launch(
         load=lambda: "CONFIG",
-        **_kwargs(calls, has_gui=True, health=lambda c: TOKEN_INVALID),
+        **_kwargs(
+            calls,
+            has_gui=True,
+            health=_health_then_ok([TOKEN_INVALID, TOKEN_OK]),
+        ),
     )
     assert rc == 0
     assert calls == ["gui_auth", "tray"]
@@ -85,7 +99,32 @@ def test_launch_falls_back_to_console_auth_without_gui():
     calls = []
     rc = bootstrap.launch(
         load=lambda: "CONFIG",
-        **_kwargs(calls, has_gui=False, health=lambda c: TOKEN_INVALID),
+        **_kwargs(
+            calls,
+            has_gui=False,
+            health=_health_then_ok([TOKEN_INVALID, TOKEN_OK]),
+        ),
     )
     assert rc == 0
     assert calls == ["console", ("console_auth", True), "tray"]
+
+
+def test_launch_aborts_when_gui_auth_does_not_connect():
+    calls = []
+    rc = bootstrap.launch(
+        load=lambda: "CONFIG",
+        gui_error=lambda *a: calls.append("gui_error"),
+        **_kwargs(calls, has_gui=True, health=lambda c: TOKEN_INVALID),
+    )
+    assert rc == 1
+    assert calls == ["gui_auth", "gui_error"]  # never starts the tray
+
+
+def test_launch_aborts_when_console_auth_does_not_connect():
+    calls = []
+    rc = bootstrap.launch(
+        load=lambda: "CONFIG",
+        **_kwargs(calls, has_gui=False, health=lambda c: TOKEN_INVALID),
+    )
+    assert rc == 1
+    assert calls == ["console", ("console_auth", True)]  # never starts the tray

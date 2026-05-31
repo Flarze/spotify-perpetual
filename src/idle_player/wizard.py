@@ -152,7 +152,7 @@ def run_setup(
     """
     path = Path(config_path) if config_path is not None else app_dir() / "config.yaml"
     if path.exists() and not _prompt_bool(
-        input_fn, f"{config_path} already exists. Overwrite?", False, output
+        input_fn, f"{path} already exists. Overwrite?", False, output
     ):
         output("Aborted; existing config left unchanged.")
         return 1
@@ -202,7 +202,7 @@ def run_setup(
         "resume_paused_track": resume_track,
     }
     path.write_text(_render_config(values))
-    output(f"\nWrote {config_path} ({len(playlists)} playlist(s)).")
+    output(f"\nWrote {path} ({len(playlists)} playlist(s)).")
 
     # Validate by loading it back (env beside the written file, so a stray .env
     # elsewhere does not interfere).

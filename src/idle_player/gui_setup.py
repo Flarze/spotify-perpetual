@@ -38,7 +38,8 @@ def _install_crash_handler(root, messagebox) -> None:
     def handler(exc, val, tb):
         msg = "".join(traceback.format_exception(exc, val, tb))
         with contextlib.suppress(Exception):
-            (app_dir() / "setup_error.log").write_text(msg)
+            with (app_dir() / "setup_error.log").open("a", encoding="utf-8") as f:
+                f.write(msg + "\n")
         with contextlib.suppress(Exception):
             messagebox.showerror("Spotify Perpetual — error", msg)
 

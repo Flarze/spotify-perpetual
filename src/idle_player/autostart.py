@@ -62,6 +62,16 @@ def _launch_plan(tray: bool) -> dict:
     }
 
 
+def _ps_quote(value: str) -> str:
+    """Escape a value for a PowerShell single-quoted string literal.
+
+    Inside single quotes PowerShell treats everything literally except a single
+    quote, which is escaped by doubling it. Without this a path containing an
+    apostrophe (e.g. a user named O'Brien) breaks the generated script.
+    """
+    return value.replace("'", "''")
+
+
 def _windows_shortcut_script(lnk_path: str, target: str, workdir: str, arguments: str) -> str:
     """PowerShell that creates a Startup shortcut launching ``target``.
 
@@ -72,12 +82,12 @@ def _windows_shortcut_script(lnk_path: str, target: str, workdir: str, arguments
     """
     return (
         "$s = (New-Object -ComObject WScript.Shell)."
-        f"CreateShortcut('{lnk_path}'); "
-        f"$s.TargetPath = '{target}'; "
-        f"$s.Arguments = '{arguments}'; "
-        f"$s.WorkingDirectory = '{workdir}'; "
+        f"CreateShortcut('{_ps_quote(lnk_path)}'); "
+        f"$s.TargetPath = '{_ps_quote(target)}'; "
+        f"$s.Arguments = '{_ps_quote(arguments)}'; "
+        f"$s.WorkingDirectory = '{_ps_quote(workdir)}'; "
         "$s.WindowStyle = 7; "
-        f"$s.Description = '{WINDOWS_DISPLAY_NAME}'; "
+        f"$s.Description = '{_ps_quote(WINDOWS_DISPLAY_NAME)}'; "
         "$s.Save()"
     )
 

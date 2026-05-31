@@ -21,7 +21,7 @@ from .auth import (
     build_client,
     token_health,
 )
-from .config import load_config
+from .config import app_dir, load_config
 from .control import Controller
 from .loop import run, setup_logging, wait_for_network
 
@@ -113,7 +113,7 @@ def run_tray() -> int:
         _open_log(config.log_file)
 
     def on_config(_icon, _item) -> None:
-        cfg = Path("config.yaml")
+        cfg = app_dir() / "config.yaml"
         _open_path(cfg if cfg.exists() else cfg.parent)
 
     def on_quit(_icon, _item) -> None:
