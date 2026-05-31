@@ -1,10 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 #
-# PyInstaller spec for a single-file, windowed, branded Spotify Perpetual.exe.
+# PyInstaller spec for a windowed, branded Spotify Perpetual app.
 # Build from the repo root:
 #     pyinstaller packaging/Spotify-Perpetual.spec --noconfirm
 #
-# Produces dist/Spotify Perpetual.exe (no console; double-click runs the tray).
+# Produces a ONE-DIR build: dist/Spotify Perpetual/Spotify Perpetual.exe plus
+# its dependencies. One-dir (not one-file) is deliberate: it has no runtime
+# self-extraction step, so it starts faster and avoids the antivirus
+# false-positives and "failed to open archive" extraction errors that plague
+# unsigned one-file PyInstaller exes. The Inno Setup installer bundles the whole
+# folder, so users still just run one Setup.exe.
 
 block_cipher = None
 
@@ -27,7 +32,10 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter'],
+    # tkinter must NOT be excluded: the first-run setup form and login dialog
+    # (gui_setup.py) are tkinter. PyInstaller's tkinter hook bundles the Tcl/Tk
+    # runtime automatically once it is no longer excluded.
+    excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -39,18 +47,27 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,               # one-dir: binaries go in COLLECT below
     name='Spotify Perpetual',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    runtime_tmpdir=None,
+    # UPX packing is a major antivirus false-positive trigger on unsigned
+    # PyInstaller exes (Defender flags it as a virus). Leave it off.
+    upx=False,
     console=False,                       # windowed: no console window
     disable_windowed_traceback=False,
     version='version_info.txt',  # branded file properties (beside this spec)
     icon=None,                           # set to 'packaging/icon.ico' if you add one
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    name='Spotify Perpetual',            # -> dist/Spotify Perpetual/
 )

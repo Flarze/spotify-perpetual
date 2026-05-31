@@ -1,206 +1,155 @@
 # spotify-perpetual
 
-Never let the music stop. **spotify-perpetual** watches your Spotify playback
-and automatically resumes a playlist whenever nothing is playing, launching
-the Spotify app first if it isn't running. Set it up once, add it to startup,
-and your speakers are never silent again.
+Keep the music going. spotify-perpetual watches your Spotify playback and
+resumes a playlist whenever nothing is playing, launching the Spotify app first
+if it isn't running. Set it up once and your speakers stay active.
 
 ## Features
 
-- **Idle detection:** polls playback on a configurable interval (default ~30s).
-- **Auto-resume:** starts your chosen playlist the moment playback stops or no
+- **Idle detection:** polls playback on a configurable interval (default 30s).
+- **Auto-resume:** starts your chosen playlist as soon as playback stops or no
   device is active.
-- **App launch fallback:** if Spotify isn't running, launches it, waits for it
-  to come online as a Connect device, then starts playback.
-- **Cross-platform:** Windows, macOS, and Linux process detection and launch.
-- **Set-and-forget:** runs headless after a one-time login, resilient to
-  transient network/API errors.
-- **Configurable:** playlist, interval, and whether a paused track counts as
-  "still listening" are all settings, not hardcoded.
+- **App launch fallback:** if Spotify isn't running, it launches the app, waits
+  for it to come online as a Connect device, then starts playback.
+- **Set and forget:** runs in the system tray after a one-time login, recovers
+  from transient network and API errors, and can start automatically at login.
+- **Configurable:** playlists, shuffle, repeat, volume, interval, and how
+  pausing is handled are all settings in the setup screen.
 
-## Requirements
+## Before you start
 
-- Python 3.9+
-- A Spotify **Premium** account — remote playback control is Premium-only. On a
-  free account the app detects the 403 and exits with a clear message.
-- A free [Spotify developer app](https://developer.spotify.com/dashboard)
-  (for the client ID/secret)
-- The Spotify desktop app installed on the machine that plays audio
+You need three things (all free except Premium):
 
-## Installation
+1. A Spotify Premium account. Remote playback control is Premium-only.
+2. The Spotify desktop app, installed on the machine that plays the audio.
+3. A free Spotify app for the login keys. This takes about two minutes:
+   - Open the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+     and click Create app.
+   - Give it any name. For the Redirect URI, enter exactly
+     `http://127.0.0.1:8888/callback`.
+   - Save, then open the app's Settings and copy its Client ID and Client
+     Secret. You paste these into the setup screen.
 
-```bash
-git clone https://github.com/Flarze/spotify-perpetual.git
-cd spotify-perpetual
-pip install -e .
+The setup screen has an "Open Spotify Developer Dashboard" button and shows the
+exact redirect URI to paste, so there is nothing to memorize.
+
+## Install (Windows)
+
+1. Download `SpotifyPerpetualSetup.exe` from the
+   [latest release](https://github.com/Flarze/spotify-perpetual/releases).
+2. Double-click it and follow the installer. No admin rights are required.
+   Leave "Start automatically when I log in" ticked to keep it always on.
+3. The app launches when the installer finishes. On the first run, a setup
+   window opens: paste your Client ID and Secret, add your playlist links, pick
+   your options, and click Save and continue.
+4. Click "Log in with Spotify". Your browser opens once to authorize the app,
+   which then moves to the system tray and starts playing.
+
+Every later login goes straight to the tray with no prompts. To change settings
+later, right-click the tray icon and open the config, or run setup again.
+
+To uninstall, use Settings > Apps or the Start Menu uninstall entry. This
+removes the app along with your saved login and config.
+
+## Using it
+
+The tray icon shows status (green for watching, grey for paused) and a menu to
+pause or resume, open the logs or config, and quit. The watcher runs in the
+background; the icon controls and reports it.
+
+Edits to the config are applied live, with no restart. Open the config from the
+tray menu and save; within one poll interval the app reloads the new playlists,
+shuffle, repeat, volume, and interval. A broken edit is logged and ignored, and
+the previous settings stay in effect.
+
+## Troubleshooting
+
+The app ships with a self-check. From the install folder, run the exe with the
+`doctor` argument:
+
+```
+"Spotify Perpetual.exe" doctor
 ```
 
-This installs the dependencies and the `idle-player` command. (Use a
-virtualenv if you prefer to keep things isolated.)
+It prints a pass or fail line for your credentials, network, saved login,
+account tier, and reachable Connect devices.
 
-## Configuration
+The OAuth token grants access to your Spotify account, so treat the install
+folder as private. Do not share its `.cache` or `config.yaml`.
 
-1. Create an app in the [Spotify developer dashboard](https://developer.spotify.com/dashboard)
-   and add a redirect URI (e.g. `http://127.0.0.1:8888/callback`).
+## Advanced configuration
 
-### Quick setup (recommended)
+The setup screen covers what most people need. To edit files directly, the app
+reads a `config.yaml` (and/or `.env`) located next to the exe.
 
-Run the wizard — it asks for your credentials, playlists, and options, then
-writes `config.yaml` for you (no hand-editing):
-
-```bash
-idle-player setup
-idle-player auth     # one-time browser login
-idle-player          # start it
-```
-
-### Manual setup
-
-Prefer to edit files yourself? Copy the template and fill in your values:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   | Setting | Description |
-   |---------|-------------|
-   | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | From your developer app |
-   | `SPOTIFY_REDIRECT_URI` | Must match the dashboard exactly |
-   | `PLAYLISTS` | Playlist(s) to resume — one, or several separated by commas, e.g. `spotify:playlist:aaaa,spotify:playlist:bbbb` |
-   | `POLL_INTERVAL` | Seconds between checks (default `30`) |
-   | `PAUSED_COUNTS_AS_PLAYING` | If `true`, a paused track is treated as "listening" and won't trigger a restart |
-   | `RESUME_PAUSED_TRACK` | If `true` (and `PAUSED_COUNTS_AS_PLAYING=false`), resume the paused track instead of starting a fresh playlist. Default `false` |
-   | `VOLUME` | Set volume `0`–`100` on start/resume; blank leaves the device volume unchanged |
-   | `FADE_IN_SECONDS` | Ramp volume up over this many seconds on start/resume (`0` = off) |
-
-### Multiple playlists, shuffle, and repeat
-
-`PLAYLISTS` takes one playlist or several, comma-separated. For shuffle and
-repeat as well, use `config.yaml` (copy `config.example.yaml`); it is
-auto-loaded from next to your `.env`:
+`config.yaml` (copy [`config.example.yaml`](config.example.yaml)):
 
 ```yaml
+client_id: "..."
+client_secret: "..."
+redirect_uri: "http://127.0.0.1:8888/callback"
+
 playlists: spotify:playlist:aaaa, spotify:playlist:bbbb
 playlist_selection: rotate   # with several: rotate (cycle in order) | random
 shuffle: true                # shuffle on each start
 repeat: context              # off | context (loop playlist) | track (loop song)
+volume: 60                   # 0-100; omit to leave device volume alone
+fade_in_seconds: 0           # >0 ramps volume up on start/resume
+poll_interval: 30
+paused_counts_as_playing: false   # false = pausing also makes the app act
+resume_paused_track: false        # resume the same track instead of a fresh playlist
 ```
 
-URIs or `open.spotify.com` links both work. With several playlists, `rotate`
-advances to the next one each time playback resumes; `random` picks one each
-time.
+Playlists accept either a `spotify:playlist:...` URI or an `open.spotify.com`
+link. With several playlists, `rotate` advances to the next one each time
+playback resumes, and `random` picks one at random.
 
-### Changing settings while it runs
+The same settings exist as `.env` variables (`SPOTIFY_CLIENT_ID`,
+`SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `PLAYLISTS`, `POLL_INTERVAL`,
+`PAUSED_COUNTS_AS_PLAYING`, `RESUME_PAUSED_TRACK`, `VOLUME`, `FADE_IN_SECONDS`);
+copy [`.env.example`](.env.example). When both files exist, `config.yaml` wins.
 
-Edits are picked up live — no restart. Save your `.env` or `config.yaml` and
-within one `poll_interval` the daemon reloads and applies the new playback
-settings (playlists, selection, shuffle, repeat, interval), logging
-`config reloaded ...`. A broken edit is logged and the previous config is kept,
-so the daemon stays up. Changing credentials triggers a Spotify client rebuild
-automatically.
+## Run from source / other platforms
 
-## Usage
-
-The first run opens a browser once to authorize your account:
+The app also runs as a standard Python package on Windows, macOS, and Linux.
 
 ```bash
-idle-player          # or: python -m idle_player
+git clone https://github.com/Flarze/spotify-perpetual.git
+cd spotify-perpetual
+pip install -e ".[tray]"     # installs the `idle-player` command + tray extra
 ```
-
-After that, the access token is cached and every later run is headless, with no
-browser needed. Leave it running and it keeps your playlist alive.
-
-You can also authorize explicitly (useful for first-time setup or to re-link a
-revoked account) without starting the loop:
 
 ```bash
-idle-player auth               # opens a browser to authorize
-idle-player auth --no-browser  # headless/WSL: prints a URL to paste back
+idle-player setup            # interactive console wizard (writes config.yaml)
+idle-player auth             # one-time browser login (--no-browser for headless/WSL)
+idle-player tray             # run with the tray icon
+idle-player                  # run headless (no icon)
+idle-player doctor           # diagnostics
 ```
 
-On startup the app checks the saved login first. If it is missing, expired, or
-revoked, it prints a clear `Run idle-player auth ...` message and exits instead
-of silently failing on every poll.
-
-## Troubleshooting
-
-Run the built-in diagnostics to check everything at once:
+Start at login without the installer:
 
 ```bash
-idle-player doctor
-```
-
-It reports a pass/fail line for your credentials, network reachability, saved
-token, account tier, and reachable Connect devices — handy when autostart is
-not doing anything and you need to know why.
-
-## System-tray icon
-
-Prefer a visible control? Run the watcher with a tray icon (green = watching,
-grey = paused) and a menu to pause/resume, open the logs or config, and quit:
-
-```bash
-pip install -e .[tray]   # one-time: installs pystray + Pillow
-idle-player tray
-```
-
-The polling loop runs in the background; the icon just controls and reports it.
-
-## Standalone executable (Windows)
-
-Build a single branded `Spotify Perpetual.exe` (no Python needed to run it):
-
-```powershell
-.\packaging\build_windows.ps1        # outputs dist\Spotify Perpetual.exe
-```
-
-Then just **double-click the exe**. On first run it walks you through setup and
-the Spotify login (a console window opens for those prompts), then drops to the
-system tray. Every later launch goes straight to the tray. No commands.
-
-The exe is portable: its config, token cache, and logs live **next to the exe**,
-so move that folder wherever you like. Because it carries real version info,
-Task Manager's Startup tab shows "Spotify Perpetual" rather than "python", and
-it runs as a single process.
-
-## Running at startup
-
-From the repo root, in the same environment where you installed the package,
-run the built-in installer:
-
-```bash
-idle-player install          # autostart the headless watcher
-idle-player install --tray   # autostart the system-tray UI instead
-idle-player status           # check whether it is installed
+idle-player install          # headless watcher   (--tray for the tray UI)
+idle-player status           # is it installed?
 idle-player uninstall        # remove it
 ```
 
-This creates the right entry for your platform automatically: a Startup-folder
-launcher on Windows (no admin needed), a launchd agent on macOS, or a systemd
-user service on Linux.
-Run `idle-player` once first to complete the browser login so autostart can run
-headless.
+This creates the right entry per platform: a Startup-folder shortcut on Windows
+(no admin), a launchd agent on macOS, or a systemd user service on Linux. Run
+`idle-player auth` once first so autostart can run without a browser prompt.
+Per-OS manual templates live in [`scripts/`](scripts/).
 
-Using the standalone exe? Run its `install` from a terminal once — the Startup
-shortcut then points at the exe itself (single branded process), launching the
-tray at login:
+### Build the installer
 
 ```powershell
-& '.\dist\Spotify Perpetual.exe' install
+.\packaging\build_windows.ps1
 ```
 
-Prefer to set it up by hand? Per-OS templates and step-by-step instructions
-live in [`scripts/`](scripts/):
-
-- **Windows:** [Task Scheduler](scripts/windows_task_scheduler.md)
-- **macOS:** [launchd agent](scripts/macos_launchd.md)
-- **Linux:** [systemd user service](scripts/linux_systemd.md)
-
-## Security
-
-The OAuth token cache grants access to your Spotify account, so **treat it as a
-secret.** It and your `.env` are excluded by `.gitignore` and should never be
-committed or shared.
+This produces the app folder `dist\Spotify Perpetual\` (a one-dir PyInstaller
+build, which avoids the antivirus false positives that one-file exes trigger).
+If [Inno Setup](https://jrsoftware.org/isdl.php) is installed, it also produces
+`dist\SpotifyPerpetualSetup.exe`, the single installer you distribute to users.
 
 ## License
 

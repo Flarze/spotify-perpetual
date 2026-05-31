@@ -14,6 +14,23 @@ import sys
 _CONSOLE_COMMANDS = {"setup", "auth", "doctor", "status", "install", "uninstall"}
 
 
+def _ensure_std_streams() -> None:
+    """Give the windowed process non-None stdout/stderr/stdin.
+
+    A windowed (``console=False``) exe starts with all three set to ``None``.
+    Any stray ``print`` — or tkinter writing a traceback — then raises and kills
+    the process silently. Point them at the null device so that never happens;
+    the GUI path needs no real console.
+    """
+    import os
+
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, "w"))
+    if sys.stdin is None:
+        sys.stdin = open(os.devnull, "r")
+
+
 def _ensure_console() -> None:
     """Attach a console to the windowed process so prompts/output are visible."""
     if sys.platform != "win32":
@@ -32,7 +49,10 @@ def main() -> None:
     raw = sys.argv[1:]
     if not raw:
         # Double-click / autostart: open-and-run (setup + auth if needed, then
-        # tray). A console is allocated only when an interactive step runs.
+        # tray). No real console here — the GUI handles prompts — but the
+        # windowed process must still have safe std streams so a stray write
+        # (or tkinter traceback) can't kill it silently.
+        _ensure_std_streams()
         from idle_player.bootstrap import launch
 
         raise SystemExit(launch(ensure_console=_ensure_console))
