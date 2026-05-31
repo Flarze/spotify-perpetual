@@ -10,7 +10,7 @@
 ; Inno Setup is installed.
 
 #define AppName "Spotify Perpetual"
-#define AppVersion "0.1.0"
+#define AppVersion "1.0.0"
 #define AppPublisher "Flarze"
 #define AppExeName "Spotify Perpetual.exe"
 #define AppUrl "https://github.com/Flarze/spotify-perpetual"
