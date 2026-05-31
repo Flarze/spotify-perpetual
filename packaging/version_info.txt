@@ -16,7 +16,7 @@ VSVersionInfo(
       StringTable(
         '040904B0',
         [
-          StringStruct('CompanyName', 'spotify-perpetual'),
+          StringStruct('CompanyName', 'Flarze'),
           StringStruct('FileDescription', 'Spotify Perpetual'),
           StringStruct('FileVersion', '1.0.0'),
           StringStruct('InternalName', 'Spotify Perpetual'),
