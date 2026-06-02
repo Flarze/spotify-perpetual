@@ -26,3 +26,13 @@ where = ["src"]
 dev = ["pytest"]
 tray = ["pystray", "Pillow"]
 build = ["pyinstaller"]
+# Local playback status via Windows SMTC (mode=hybrid). Windows-only.
+# winrt-* are the maintained bindings (wheels for current Pythons incl. 3.13+);
+# all pull in winrt-runtime. Foundation is required to await the WinRT async
+# ops; Foundation.Collections to iterate the session list. On Python <=3.12 the
+# older single-package "winsdk" also works - status.py imports whichever exists.
+smtc = [
+    "winrt-Windows.Media.Control; sys_platform == 'win32'",
+    "winrt-Windows.Foundation; sys_platform == 'win32'",
+    "winrt-Windows.Foundation.Collections; sys_platform == 'win32'",
+]

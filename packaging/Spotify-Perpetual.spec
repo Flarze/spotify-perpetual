@@ -11,13 +11,25 @@
 # unsigned one-file PyInstaller exes. The Inno Setup installer bundles the whole
 # folder, so users still just run one Setup.exe.
 
+from PyInstaller.utils.hooks import collect_all
+
 block_cipher = None
+
+# SMTC (mode=hybrid) uses the winrt-* bindings, imported lazily by name in
+# status.py, so PyInstaller cannot discover them on its own. Collect the whole
+# winrt namespace (native .pyd modules + metadata) when it is installed; skip
+# cleanly for an api-only build where it is absent.
+smtc_datas, smtc_binaries, smtc_hidden = [], [], []
+try:
+    smtc_datas, smtc_binaries, smtc_hidden = collect_all('winrt')
+except Exception:
+    pass
 
 a = Analysis(
     ['entry.py'],
     pathex=['../src'],
-    binaries=[],
-    datas=[],
+    binaries=smtc_binaries,
+    datas=smtc_datas,
     # PyInstaller misses these without help: the pystray Windows backend and the
     # third-party libs imported lazily / by name.
     hiddenimports=[
@@ -28,7 +40,9 @@ a = Analysis(
         'dotenv',
         'yaml',
         'psutil',
-    ],
+        # SMTC binding (mode=hybrid); harmless if winrt is not installed.
+        'winrt.windows.media.control',
+    ] + smtc_hidden,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

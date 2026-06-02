@@ -1,7 +1,7 @@
 """Cross-thread control for the polling loop.
 
 A Controller lets a UI (e.g. the system-tray icon) pause/resume the watcher,
-ask it to stop, and read a human-readable status — while the loop runs on a
+ask it to stop, and read a human-readable status - while the loop runs on a
 background thread. It is just two threading.Events plus a status string, so it
 is trivially testable without any GUI.
 """
@@ -18,6 +18,7 @@ class Controller:
         self._stop = threading.Event()
         self._pause = threading.Event()
         self._status = "starting"
+        self._track = ""
         self._lock = threading.Lock()
 
     # --- stop ---
@@ -54,3 +55,14 @@ class Controller:
     def status(self) -> str:
         with self._lock:
             return self._status
+
+    # --- track (SMTC-driven, instant) ---
+    def set_track(self, track: str) -> None:
+        """Set the currently-displayed track label (pushed by the SMTC listener)."""
+        with self._lock:
+            self._track = track
+
+    def track(self) -> str:
+        """The last track label seen via SMTC, or "" if none."""
+        with self._lock:
+            return self._track
