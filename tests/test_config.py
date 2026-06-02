@@ -329,3 +329,62 @@ def test_yaml_can_supply_credentials_standalone(tmp_path):
     assert config.redirect_uri == "http://127.0.0.1:8888/callback"
     # Normalization still applies to a yaml-supplied playlist URL.
     assert config.playlist_uri == "spotify:playlist:37i9dQZF1DX"
+
+
+# --- mode + resume_delay_seconds ------------------------------------------
+
+
+def test_mode_defaults_to_api(tmp_path):
+    config = load_config(env_path=write_env(tmp_path / ".env"))
+    assert config.mode == "api"
+    assert config.resume_delay_seconds == 0
+
+
+def test_mode_hybrid_from_env(tmp_path):
+    env = write_env(tmp_path / ".env", MODE="hybrid")
+    assert load_config(env_path=env).mode == "hybrid"
+
+
+def test_mode_is_normalized_and_validated(tmp_path):
+    # Case-insensitive accept.
+    env = write_env(tmp_path / ".env", MODE="HYBRID")
+    assert load_config(env_path=env).mode == "hybrid"
+
+    # Unknown value rejected with a readable error.
+    bad = write_env(tmp_path / ".env", MODE="local")
+    with pytest.raises(ValueError) as exc:
+        load_config(env_path=bad)
+    assert "mode" in str(exc.value).lower()
+
+
+def test_resume_delay_seconds_parsed_and_validated(tmp_path):
+    env = write_env(tmp_path / ".env", RESUME_DELAY_SECONDS="10")
+    assert load_config(env_path=env).resume_delay_seconds == 10
+
+    bad = write_env(tmp_path / ".env", RESUME_DELAY_SECONDS="-1")
+    with pytest.raises(ValueError) as exc:
+        load_config(env_path=bad)
+    assert "resume_delay_seconds" in str(exc.value)
+
+
+def test_mode_and_resume_delay_from_yaml(tmp_path):
+    env = write_env(tmp_path / ".env")
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text("mode: hybrid\nresume_delay_seconds: 5\n")
+    config = load_config(env_path=env, yaml_path=yaml_path)
+    assert config.mode == "hybrid"
+    assert config.resume_delay_seconds == 5
+
+
+def test_listener_poll_seconds_default_and_parse(tmp_path):
+    assert load_config(env_path=write_env(tmp_path / ".env")).listener_poll_seconds == 1.0
+
+    env = write_env(tmp_path / ".env", LISTENER_POLL_SECONDS="0.5")
+    assert load_config(env_path=env).listener_poll_seconds == 0.5
+
+
+def test_listener_poll_seconds_must_be_positive(tmp_path):
+    env = write_env(tmp_path / ".env", LISTENER_POLL_SECONDS="0")
+    with pytest.raises(ValueError) as exc:
+        load_config(env_path=env)
+    assert "listener_poll_seconds" in str(exc.value)

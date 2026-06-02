@@ -55,6 +55,9 @@ class Config:
     token_cache_path: str = ".cache"
     paused_counts_as_playing: bool = True
     resume_paused_track: bool = False
+    resume_delay_seconds: int = 0  # wait this long before auto-resuming a pause
+    mode: str = "api"  # "api" (Web API status) | "hybrid" (SMTC status, API control)
+    listener_poll_seconds: float = 1.0  # SMTC tray-display refresh cadence (hybrid)
     preferred_device_name: str = ""
     launch_wait_seconds: int = 8
     backoff_factor: int = 2
@@ -75,6 +78,7 @@ class Config:
 _REQUIRED = ("client_id", "client_secret", "redirect_uri", "playlist_uri")
 _VALID_SELECTION = ("rotate", "random")
 _VALID_REPEAT = ("off", "context", "track")
+_VALID_MODE = ("api", "hybrid")
 
 
 def _normalize_playlist_uri(value: str) -> str:
@@ -155,6 +159,16 @@ def _to_int(value, default: int) -> int:
     return int(text)
 
 
+def _to_float(value, default: float) -> float:
+    """Parse a float, falling back to default for None or blank values."""
+    if value is None:
+        return default
+    text = str(value).strip()
+    if not text:
+        return default
+    return float(text)
+
+
 def load_config(
     env_path: Optional[os.PathLike] = None,
     yaml_path: Optional[os.PathLike] = None,
@@ -167,7 +181,7 @@ def load_config(
             values. If omitted, a ``config.yaml`` sitting next to ``env_path`` is
             auto-discovered and used. config.yaml may supply every setting
             (including credentials), so it can serve as a complete standalone
-            config — the path the planned first-run wizard writes.
+            config - the path the planned first-run wizard writes.
 
     Raises:
         ValueError: if a required field is missing or empty, with the offending
@@ -194,6 +208,9 @@ def load_config(
         "token_cache_path": env.get("TOKEN_CACHE_PATH"),
         "paused_counts_as_playing": env.get("PAUSED_COUNTS_AS_PLAYING"),
         "resume_paused_track": env.get("RESUME_PAUSED_TRACK"),
+        "resume_delay_seconds": env.get("RESUME_DELAY_SECONDS"),
+        "mode": env.get("MODE"),
+        "listener_poll_seconds": env.get("LISTENER_POLL_SECONDS"),
     }
 
     if yaml_path is not None and Path(yaml_path).exists():
@@ -234,9 +251,25 @@ def load_config(
     if repeat not in _VALID_REPEAT:
         raise ValueError(f"Invalid repeat {repeat!r}; expected one of {_VALID_REPEAT}.")
 
+    mode = str(values.get("mode") or "api").strip().lower()
+    if mode not in _VALID_MODE:
+        raise ValueError(f"Invalid mode {mode!r}; expected one of {_VALID_MODE}.")
+
     volume = _to_opt_int(values.get("volume"))
     if volume is not None and not (0 <= volume <= 100):
         raise ValueError(f"Invalid volume {volume}; expected 0-100 (or blank to leave unchanged).")
+
+    resume_delay_seconds = _to_int(values.get("resume_delay_seconds"), 0)
+    if resume_delay_seconds < 0:
+        raise ValueError(
+            f"Invalid resume_delay_seconds {resume_delay_seconds}; expected >= 0."
+        )
+
+    listener_poll_seconds = _to_float(values.get("listener_poll_seconds"), 1.0)
+    if listener_poll_seconds <= 0:
+        raise ValueError(
+            f"Invalid listener_poll_seconds {listener_poll_seconds}; expected > 0."
+        )
 
     defaults = Config(client_id="", client_secret="", redirect_uri="", playlist_uri="")
     token_cache_path = values["token_cache_path"] or defaults.token_cache_path
@@ -273,6 +306,9 @@ def load_config(
             if values.get("resume_paused_track") is not None
             else defaults.resume_paused_track
         ),
+        resume_delay_seconds=resume_delay_seconds,
+        mode=mode,
+        listener_poll_seconds=listener_poll_seconds,
         preferred_device_name=values.get("preferred_device_name", defaults.preferred_device_name),
         launch_wait_seconds=_to_int(values.get("launch_wait_seconds"), defaults.launch_wait_seconds),
         backoff_factor=_to_int(values.get("backoff_factor"), defaults.backoff_factor),
@@ -309,6 +345,9 @@ def _merge_yaml(values: dict, data: dict) -> None:
         "poll_interval",
         "paused_counts_as_playing",
         "resume_paused_track",
+        "resume_delay_seconds",
+        "mode",
+        "listener_poll_seconds",
         "token_cache_path",
     ):
         if key in data:

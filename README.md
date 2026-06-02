@@ -15,6 +15,12 @@ if it isn't running. Set it up once and your speakers stay active.
   from transient network and API errors, and can start automatically at login.
 - **Configurable:** playlists, shuffle, repeat, volume, interval, and how
   pausing is handled are all settings in the setup screen.
+- **Hybrid status (Windows):** optionally read playback state from the local OS
+  (Windows SMTC) instead of polling the Web API. The Web API is then called only
+  to start or resume playback - never to check status - and the tray shows the
+  current track within ~1s. See [Status mode](#status-mode-api-vs-hybrid).
+- **Resume delay:** an optional grace period before acting on a pause, so a
+  deliberate pause isn't undone instantly.
 
 ## Before you start
 
@@ -98,6 +104,10 @@ fade_in_seconds: 0           # >0 ramps volume up on start/resume
 poll_interval: 30
 paused_counts_as_playing: false   # false = pausing also makes the app act
 resume_paused_track: false        # resume the same track instead of a fresh playlist
+resume_delay_seconds: 0           # wait this long before acting on a pause (0 = instant)
+
+mode: api                         # api (Web API status) | hybrid (local SMTC status)
+listener_poll_seconds: 1.0        # hybrid: how often the tray re-reads SMTC
 ```
 
 Playlists accept either a `spotify:playlist:...` URI or an `open.spotify.com`
@@ -106,8 +116,40 @@ playback resumes, and `random` picks one at random.
 
 The same settings exist as `.env` variables (`SPOTIFY_CLIENT_ID`,
 `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `PLAYLISTS`, `POLL_INTERVAL`,
-`PAUSED_COUNTS_AS_PLAYING`, `RESUME_PAUSED_TRACK`, `VOLUME`, `FADE_IN_SECONDS`);
-copy [`.env.example`](.env.example). When both files exist, `config.yaml` wins.
+`PAUSED_COUNTS_AS_PLAYING`, `RESUME_PAUSED_TRACK`, `RESUME_DELAY_SECONDS`,
+`MODE`, `LISTENER_POLL_SECONDS`, `VOLUME`, `FADE_IN_SECONDS`); copy
+[`.env.example`](.env.example). When both files exist, `config.yaml` wins.
+
+### Status mode: api vs hybrid
+
+`mode` controls how the app reads "what is Spotify doing right now":
+
+- **`api`** (default) - reads playback with the Spotify Web API, polling
+  `current_playback` every `poll_interval`. Works on every platform.
+- **`hybrid`** (Windows only) - reads playback from the OS via Windows System
+  Media Transport Controls (SMTC), the same local mechanism a desktop overlay
+  uses to show the current track. No Web API status polling and no rate-limit
+  cost: **the Web API is called only at the moment playback is started or
+  resumed**, never to check status. While music is playing it makes zero API
+  calls. The tray also reflects the current track within ~1s
+  (`listener_poll_seconds`), instead of once per `poll_interval`.
+
+Hybrid still uses the Web API (and Premium) for *control* - starting and
+resuming playback - so credentials and login are unchanged. It needs the SMTC
+binding, installed via the `smtc` extra:
+
+```bash
+pip install -e ".[tray,smtc]"
+```
+
+If SMTC is unavailable (non-Windows, or the binding is missing), `hybrid`
+falls back to the Web API automatically. `idle-player doctor` reports whether
+SMTC is available when `mode: hybrid`.
+
+`resume_delay_seconds` adds a grace period before acting on a pause: the app
+waits, then re-checks, and if you have resumed or switched track in the
+meantime it leaves playback alone instead of restarting it. Applies in both
+modes.
 
 ## Run from source / other platforms
 

@@ -414,7 +414,7 @@ def test_run_passes_controller_into_run_once(tmp_path, monkeypatch):
     ctrl = Controller()
     seen = {}
 
-    def fake_run_once(cfg, sp, logger, rotator=None, controller=None):
+    def fake_run_once(cfg, sp, logger, rotator=None, controller=None, status_source=None):
         seen["controller"] = controller
         controller.set_status("watching — started playlist")
         return "started"
@@ -461,7 +461,7 @@ def test_run_once_sets_status_on_start(tmp_path, monkeypatch):
 def test_run_stops_on_premium_required_without_sleeping(tmp_path, monkeypatch):
     config = make_config(tmp_path)
 
-    def boom(cfg, sp, logger, rotator=None, controller=None):
+    def boom(cfg, sp, logger, rotator=None, controller=None, status_source=None):
         raise PremiumRequiredError("needs premium")
 
     slept = []
@@ -472,3 +472,155 @@ def test_run_stops_on_premium_required_without_sleeping(tmp_path, monkeypatch):
     loop.run(config, object())
 
     assert slept == []
+
+
+# --- resume delay + status_source ------------------------------------------
+
+
+class FakeStatusSource:
+    """Returns queued playback responses (last one repeats)."""
+
+    def __init__(self, *responses):
+        self._responses = list(responses)
+        self.calls = 0
+
+    def get_playback(self):
+        self.calls += 1
+        idx = min(self.calls - 1, len(self._responses) - 1)
+        return self._responses[idx]
+
+
+def test_run_once_uses_injected_status_source_for_read(tmp_path, monkeypatch):
+    stub_ensure_running(monkeypatch)
+    # status_source says idle (None); the API client would say "playing". If
+    # run_once read the source (not the client), it starts playback.
+    sp = FakeSpotify(
+        playback={"is_playing": True, "item": {"uri": "x"}},
+        devices=[{"id": "d1", "name": "L", "is_active": True}],
+    )
+    src = FakeStatusSource(None)
+
+    result = loop.run_once(
+        make_config(tmp_path), sp, logging.getLogger("test"), None, None, src
+    )
+
+    assert result == "started"
+    assert src.calls == 1
+
+
+def test_run_once_resume_delay_waits_then_resumes(tmp_path, monkeypatch):
+    stub_ensure_running(monkeypatch)
+    slept = []
+    monkeypatch.setattr(loop, "_sleep", lambda delay, c: slept.append(delay) or False)
+    paused = {"is_playing": False, "item": {"name": "S", "artists": [{"name": "A"}]}}
+    sp = FakeSpotify(devices=[{"id": "d1", "name": "L", "is_active": True}])
+    src = FakeStatusSource(paused)  # still paused after the grace re-read
+    config = make_config(
+        tmp_path,
+        paused_counts_as_playing=False,
+        resume_paused_track=True,
+        resume_delay_seconds=5,
+    )
+
+    result = loop.run_once(config, sp, logging.getLogger("test"), None, None, src)
+
+    assert result == "resumed"
+    assert slept == [5]  # waited the grace period once
+    assert src.calls == 2  # initial read + one re-read after the wait
+    assert sp.transfer_calls == [{"device_id": "d1", "force_play": True}]
+
+
+def test_run_once_resume_delay_waits_before_starting_playlist(tmp_path, monkeypatch):
+    # Resume-in-place disabled: a pause should still honor the grace delay before
+    # starting a fresh playlist, not act instantly.
+    stub_ensure_running(monkeypatch)
+    slept = []
+    monkeypatch.setattr(loop, "_sleep", lambda delay, c: slept.append(delay) or False)
+    paused = {"is_playing": False, "item": {"name": "S", "artists": [{"name": "A"}]}}
+    sp = FakeSpotify(devices=[{"id": "d1", "name": "L", "is_active": True}])
+    src = FakeStatusSource(paused)  # still paused after the grace re-read
+    config = make_config(
+        tmp_path,
+        paused_counts_as_playing=False,
+        resume_paused_track=False,  # no resume-in-place -> start a playlist
+        resume_delay_seconds=10,
+    )
+
+    result = loop.run_once(config, sp, logging.getLogger("test"), None, None, src)
+
+    assert result == "started"
+    assert slept == [10]  # waited before starting
+    assert src.calls == 2  # initial read + re-read after the wait
+    assert sp.transfer_calls == []
+    assert sp.start_calls[0]["context_uri"] == config.playlists()[0]
+
+
+def test_run_once_resume_delay_cancels_when_no_longer_paused(tmp_path, monkeypatch):
+    stub_ensure_running(monkeypatch)
+    monkeypatch.setattr(loop, "_sleep", lambda delay, c: False)
+    paused = {"is_playing": False, "item": {"name": "S", "artists": [{"name": "A"}]}}
+    playing = {"is_playing": True, "item": {"name": "S", "artists": [{"name": "A"}]}}
+    sp = FakeSpotify(devices=[{"id": "d1", "name": "L", "is_active": True}])
+    src = FakeStatusSource(paused, playing)  # user resumed during the grace
+    config = make_config(
+        tmp_path,
+        paused_counts_as_playing=False,
+        resume_paused_track=True,
+        resume_delay_seconds=5,
+    )
+
+    result = loop.run_once(config, sp, logging.getLogger("test"), None, None, src)
+
+    assert result == "skip"  # left alone; not fought
+    assert sp.transfer_calls == []
+    assert sp.start_calls == []
+
+
+def test_run_once_resume_delay_aborts_on_stop(tmp_path, monkeypatch):
+    stub_ensure_running(monkeypatch)
+    monkeypatch.setattr(loop, "_sleep", lambda delay, c: True)  # stop during grace
+    paused = {"is_playing": False, "item": {"name": "S", "artists": [{"name": "A"}]}}
+    sp = FakeSpotify(devices=[{"id": "d1", "name": "L", "is_active": True}])
+    src = FakeStatusSource(paused)
+    config = make_config(
+        tmp_path,
+        paused_counts_as_playing=False,
+        resume_paused_track=True,
+        resume_delay_seconds=5,
+    )
+
+    result = loop.run_once(config, sp, logging.getLogger("test"), None, None, src)
+
+    assert result == "skip"
+    assert sp.transfer_calls == []
+    assert src.calls == 1  # never re-read after the stop
+
+
+def test_make_status_source_hybrid_uses_smtc_when_available(tmp_path, monkeypatch):
+    from idle_player.status import SmtcStatusSource
+
+    monkeypatch.setattr(loop, "smtc_available", lambda: True)
+    config = make_config(tmp_path, mode="hybrid")
+
+    src = loop._make_status_source(config, object(), logging.getLogger("test"))
+
+    assert isinstance(src, SmtcStatusSource)
+
+
+def test_make_status_source_hybrid_falls_back_when_smtc_missing(tmp_path, monkeypatch):
+    from idle_player.status import ApiStatusSource
+
+    monkeypatch.setattr(loop, "smtc_available", lambda: False)
+    config = make_config(tmp_path, mode="hybrid")
+
+    src = loop._make_status_source(config, object(), logging.getLogger("test"))
+
+    assert isinstance(src, ApiStatusSource)
+
+
+def test_make_status_source_api_mode(tmp_path):
+    from idle_player.status import ApiStatusSource
+
+    config = make_config(tmp_path, mode="api")
+    src = loop._make_status_source(config, object(), logging.getLogger("test"))
+    assert isinstance(src, ApiStatusSource)

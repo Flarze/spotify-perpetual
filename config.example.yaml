@@ -2,11 +2,11 @@
 #
 # config.yaml is auto-loaded when it sits next to your .env. It can either
 # override individual .env values or hold the entire configuration on its own
-# (credentials included) — useful as a single file a setup wizard can write.
+# (credentials included) - useful as a single file a setup wizard can write.
 # YAML keys take precedence over .env. Leave a key out to keep the .env value
 # (or the built-in default).
 #
-# config.yaml is a SECRET if it holds credentials — it is gitignored. Never
+# config.yaml is a SECRET if it holds credentials - it is gitignored. Never
 # commit it.
 
 # Spotify app credentials (https://developer.spotify.com/dashboard).
@@ -37,6 +37,20 @@ paused_counts_as_playing: true
 # that same track instead of starting a fresh playlist. No effect when
 # paused_counts_as_playing is true.
 resume_paused_track: false
+
+# Wait this many seconds before auto-resuming a pause. If you resume or switch
+# track yourself within the window, the app leaves it alone. 0 = resume instantly.
+resume_delay_seconds: 0
+
+# Status backend:
+#   api    - read playback via the Web API (needs a Premium token; polls the API)
+#   hybrid - read playback from local Windows SMTC (no API status polling, no
+#            rate-limit cost); control (start/resume) still uses the Web API.
+mode: api
+
+# How often (seconds) the tray re-reads SMTC to refresh the displayed track in
+# hybrid mode. The read is a local OS call (no network), so ~1s is cheap.
+listener_poll_seconds: 1.0
 
 device:
   preferred_name: ""         # optional: prefer this Connect device by name

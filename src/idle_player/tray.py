@@ -24,6 +24,7 @@ from .auth import (
 from .config import app_dir, load_config
 from .control import Controller
 from .loop import run, setup_logging, wait_for_network
+from .status import SmtcListener
 
 APP_NAME = "Spotify Perpetual"
 
@@ -51,7 +52,7 @@ def _open_log(log_file) -> None:
     """Open the log file; fall back to its folder if it can't be opened.
 
     A missing file, or a ``.log`` extension with no associated app on Windows,
-    would otherwise do nothing — opening the containing folder always works.
+    would otherwise do nothing - opening the containing folder always works.
     """
     log = Path(log_file)
     if not log.exists() or not _open_path(log):
@@ -105,6 +106,23 @@ def run_tray() -> int:
         icon.icon = _make_image(running=not controller.paused)
         icon.update_menu()
 
+    # Instant track/status display via SMTC (Windows): the polling loop only
+    # refreshes status once per poll_interval; this updates the tray the moment
+    # the track or play/pause state changes. No-op when SMTC is unavailable.
+    listener = SmtcListener(poll_seconds=config.listener_poll_seconds)
+
+    def _on_smtc_change(label: str) -> None:
+        controller.set_track(label)
+        try:
+            # Tray menus only redraw when opened; the title is the live hover
+            # tooltip, so update both for an instant-visible refresh.
+            icon.title = f"{APP_NAME} - {label}"
+            icon.update_menu()
+        except Exception:  # noqa: BLE001 - a display refresh must never crash
+            pass
+
+    listener.start(_on_smtc_change)
+
     def on_toggle(_icon, _item) -> None:
         controller.toggle_pause()
         _refresh()
@@ -121,7 +139,8 @@ def run_tray() -> int:
         _icon.stop()
 
     icon.menu = pystray.Menu(
-        pystray.MenuItem(lambda _i: controller.status(), None, enabled=False),
+        # Live track from SMTC when available, else the watcher status.
+        pystray.MenuItem(lambda _i: controller.track() or controller.status(), None, enabled=False),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(
             lambda _i: "Resume watching" if controller.paused else "Pause watching",
@@ -135,6 +154,7 @@ def run_tray() -> int:
 
     icon.run()  # blocks until on_quit stops it
 
+    listener.stop()
     controller.stop()
     worker.join(timeout=5)
     return 0

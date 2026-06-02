@@ -22,7 +22,7 @@ Write-Host "Stopping any running Spotify Perpetual..."
 Stop-Process -Name "Spotify Perpetual" -Force -ErrorAction SilentlyContinue
 
 Write-Host "Installing build dependencies..."
-& $py -m pip install -e ".[tray,build]"
+& $py -m pip install -e ".[tray,build,smtc]"
 
 Write-Host "Building exe..."
 & $py -m PyInstaller packaging\Spotify-Perpetual.spec --noconfirm --clean

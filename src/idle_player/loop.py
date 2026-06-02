@@ -19,7 +19,6 @@ from .config import Config, app_dir, load_config
 from .player import (
     PlaylistRotator,
     PremiumRequiredError,
-    get_playback,
     is_paused_with_track,
     pick_device,
     resume_playback,
@@ -28,6 +27,7 @@ from .player import (
     track_label,
 )
 from .spotify_process import ensure_running
+from .status import ApiStatusSource, SmtcStatusSource, smtc_available
 
 LOGGER_NAME = "idle_player"
 
@@ -61,7 +61,7 @@ def wait_for_network(config: Config, logger: logging.Logger, probe=_probe) -> bo
     ``network_wait_attempts`` times, ``network_wait_interval`` seconds apart.
 
     Returns True once reachable. Returns False if still unreachable after the
-    budget — the caller continues anyway, leaving the loop's normal error
+    budget - the caller continues anyway, leaving the loop's normal error
     handling to cope.
     """
     attempts = max(1, config.network_wait_attempts)
@@ -114,33 +114,64 @@ def setup_logging(config: Config) -> logging.Logger:
     return logger
 
 
-def run_once(config: Config, sp, logger: logging.Logger, rotator=None, controller=None) -> str:
+def run_once(
+    config: Config,
+    sp,
+    logger: logging.Logger,
+    rotator=None,
+    controller=None,
+    status_source=None,
+) -> str:
     """Run one decide-and-act cycle. Returns the action taken.
 
-    Returns one of: "skip" (already playing), "resumed" (continued a paused
-    track), "started", or "no_device" (still no active device after launching
-    and retrying once).
+    Returns one of: "skip" (already playing, or a pending pause that resolved
+    during the resume-delay grace), "resumed" (continued a paused track),
+    "started", or "no_device" (still no active device after launching and
+    retrying once).
 
     ``rotator`` chooses which playlist to start; without one the first
     configured playlist is used. The playlist is chosen once per cycle so the
     404 retry reuses the same selection (rotation advances per start, not per
     attempt). ``controller`` (optional) gets a human-readable status, including
     the current track name where known.
+
+    ``status_source`` decides how playback state is read - the Web API or local
+    SMTC. It defaults to the Web API so existing callers are unaffected; control
+    (start/resume) always goes through the Web API client ``sp``.
     """
+    if status_source is None:
+        status_source = ApiStatusSource(sp)
 
     def _status(msg: str) -> None:
         if controller is not None:
             controller.set_status(msg)
 
-    playback = get_playback(sp)
+    playback = status_source.get_playback()
     label = track_label(playback)
     if not should_start_playback(playback, config.paused_counts_as_playing):
         logger.info("playback active, nothing to do")
         _status(f"playing: {label}" if label else "music playing")
         return "skip"
 
+    # A loaded-but-paused session is what triggered us. Optional grace period:
+    # wait, then re-read. If the user resumed or switched track meanwhile, leave
+    # it alone instead of fighting them. Applies to BOTH actions below (resume
+    # in place, or start a fresh playlist), so a deliberate pause is never acted
+    # on instantly when a delay is configured.
+    if config.resume_delay_seconds > 0 and is_paused_with_track(playback):
+        logger.info("paused; waiting %ss before acting", config.resume_delay_seconds)
+        _status(f"paused - acting in {config.resume_delay_seconds}s")
+        if _sleep(config.resume_delay_seconds, controller):
+            return "skip"  # stop requested during the grace period
+        playback = status_source.get_playback()
+        label = track_label(playback)
+        if not should_start_playback(playback, config.paused_counts_as_playing):
+            logger.info("no longer idle after grace; leaving it alone")
+            _status(f"playing: {label}" if label else "music playing")
+            return "skip"
+
     # If configured, resume a paused track in place rather than starting a fresh
-    # playlist. Rotation is untouched here — it only advances on a real start.
+    # playlist. Rotation is untouched here - it only advances on a real start.
     if config.resume_paused_track and is_paused_with_track(playback):
         ensure_running(config.launch_wait_seconds)
         device_id = pick_device(sp, config.preferred_device_name)
@@ -185,6 +216,22 @@ def run_once(config: Config, sp, logger: logging.Logger, rotator=None, controlle
     logger.warning("no active device after retry; will try again next poll")
     _status("no Connect device")
     return "no_device"
+
+
+def _make_status_source(config: Config, sp, logger: logging.Logger):
+    """Pick the status backend for ``config.mode``.
+
+    "hybrid" reads playback from local SMTC (no API status calls); if SMTC is
+    unavailable (non-Windows, or winsdk missing) it logs and falls back to the
+    Web API so the daemon still works. "api" (the default) always uses the
+    Web API. Control always uses ``sp`` regardless of mode.
+    """
+    if config.mode == "hybrid":
+        if smtc_available():
+            logger.info("mode=hybrid: reading playback status from local SMTC")
+            return SmtcStatusSource()
+        logger.warning("mode=hybrid but SMTC unavailable; using Web API for status")
+    return ApiStatusSource(sp)
 
 
 def _backoff_delay(config: Config, failures: int) -> int:
@@ -281,15 +328,18 @@ def run(config: Config, sp, controller=None) -> None:
         config.playlist_selection,
     )
     mtimes = _watch_mtimes()
+    status_source = _make_status_source(config, sp, logger)
     failures = 0
     while True:
         if controller is not None and controller.stopped:
             logger.info("stop requested; shutting down")
             break
 
-        config, sp, rotator, mtimes, _ = maybe_reload(
+        config, sp, rotator, mtimes, reloaded = maybe_reload(
             config, sp, rotator, mtimes, logger
         )
+        if reloaded:
+            status_source = _make_status_source(config, sp, logger)
 
         if controller is not None and controller.paused:
             controller.set_status("paused (watcher off)")
@@ -298,7 +348,7 @@ def run(config: Config, sp, controller=None) -> None:
             continue
 
         try:
-            run_once(config, sp, logger, rotator, controller)
+            run_once(config, sp, logger, rotator, controller, status_source)
             failures = 0  # recovered: drop back to normal cadence
         except KeyboardInterrupt:
             logger.info("interrupted; shutting down")
@@ -307,13 +357,13 @@ def run(config: Config, sp, controller=None) -> None:
             # Free account: retrying never succeeds, so stop instead of looping.
             logger.error("%s", exc)
             if controller is not None:
-                controller.set_status("stopped — Premium required")
+                controller.set_status("stopped - Premium required")
             break
         except Exception:  # noqa: BLE001 - keep the daemon alive on transient errors
             failures += 1
             logger.exception("transient error; continuing")
             if controller is not None:
-                controller.set_status("error — retrying")
+                controller.set_status("error - retrying")
 
         delay = _backoff_delay(config, failures)
         if failures:
