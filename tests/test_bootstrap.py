@@ -19,6 +19,9 @@ def _kwargs(calls, *, has_gui, **overrides):
         health=lambda c: TOKEN_OK,
         tray=lambda: calls.append("tray") or 0,
         output=lambda *a: None,
+        acquire=lambda path: True,
+        release=lambda path: None,
+        lock_path="ignored",
     )
     base.update(overrides)
     return base
@@ -128,3 +131,29 @@ def test_launch_aborts_when_console_auth_does_not_connect():
     )
     assert rc == 1
     assert calls == ["console", ("console_auth", True)]  # never starts the tray
+
+
+def test_launch_exits_when_already_running():
+    calls = []
+    rc = bootstrap.launch(
+        load=lambda: "CONFIG",
+        **_kwargs(calls, has_gui=True, acquire=lambda path: False),
+    )
+    assert rc == 0  # exit cleanly, not an error
+    assert calls == []  # never sets up, auths, or starts a second tray
+
+
+def test_launch_releases_lock_after_tray():
+    calls = []
+    released = []
+    rc = bootstrap.launch(
+        load=lambda: "CONFIG",
+        **_kwargs(
+            calls,
+            has_gui=True,
+            release=lambda path: released.append(path),
+        ),
+    )
+    assert rc == 0
+    assert calls == ["tray"]
+    assert released == ["ignored"]  # lock released even though run succeeded
