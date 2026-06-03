@@ -15,6 +15,7 @@ console, a browser, a Tk display, or a real tray.
 
 from __future__ import annotations
 
+from . import single_instance
 from .auth import TOKEN_OK, run_auth_flow, token_health
 from .config import load_config
 from .gui_setup import gui_available, run_gui_auth, run_gui_setup
@@ -35,12 +36,59 @@ def launch(
     tray=run_tray,
     output=print,
     gui_error=None,
+    acquire=single_instance.acquire,
+    release=single_instance.release,
+    lock_path=None,
 ) -> int:
     """Set up + authorize as needed, then run the tray. Returns an exit code.
 
     ``ensure_console`` is called only on the console fallback path (no Tk), so a
     windowed exe with a display never allocates a console.
+
+    Holds the single-instance lock for the whole run so a second double-click
+    (or autostart firing while a manual copy is up) exits instead of stacking a
+    second polling daemon. The module entry point locks its own paths; this is
+    the equivalent guard for the packaged-exe open-and-run path, which does not
+    pass through ``__main__``.
     """
+    if lock_path is None:
+        lock_path = single_instance.default_lock_path()
+    if not acquire(lock_path):
+        output("Spotify Perpetual is already running.")
+        return 0
+    try:
+        return _run(
+            ensure_console=ensure_console,
+            load=load,
+            has_gui=has_gui,
+            gui_setup=gui_setup,
+            console_setup=console_setup,
+            gui_auth=gui_auth,
+            console_auth=console_auth,
+            health=health,
+            tray=tray,
+            output=output,
+            gui_error=gui_error,
+        )
+    finally:
+        release(lock_path)
+
+
+def _run(
+    *,
+    ensure_console,
+    load,
+    has_gui,
+    gui_setup,
+    console_setup,
+    gui_auth,
+    console_auth,
+    health,
+    tray,
+    output,
+    gui_error,
+) -> int:
+    """The setup -> auth -> tray flow, run while holding the instance lock."""
     # 1. Configured? If load_config fails (missing/invalid config), run setup.
     try:
         config = load()
