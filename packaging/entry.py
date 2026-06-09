@@ -11,7 +11,7 @@ a black box. Therefore:
 import sys
 
 # Subcommands that print to / read from a console.
-_CONSOLE_COMMANDS = {"setup", "auth", "doctor", "status", "install", "uninstall"}
+_CONSOLE_COMMANDS = {"setup", "auth", "doctor", "stats", "status", "install", "uninstall"}
 
 
 def _ensure_std_streams() -> None:

@@ -68,6 +68,20 @@ tray menu and save; within one poll interval the app reloads the new playlists,
 shuffle, repeat, volume, and interval. A broken edit is logged and ignored, and
 the previous settings stay in effect.
 
+### Usage statistics
+
+The watcher keeps a running tally of what it does: total watch time, how many
+checks it ran, how often it actually started or resumed playback, and a per-day
+breakdown of the last week. Run the exe with the `stats` argument (or
+`idle-player stats` from source):
+
+```
+"Spotify Perpetual.exe" stats
+```
+
+The counts live in a small `stats.json` next to the config; delete it to reset
+them. Recording is best-effort and never interferes with the watcher itself.
+
 ## Troubleshooting
 
 The app ships with a self-check. From the install folder, run the exe with the
@@ -167,6 +181,7 @@ idle-player auth             # one-time browser login (--no-browser for headless
 idle-player tray             # run with the tray icon
 idle-player                  # run headless (no icon)
 idle-player doctor           # diagnostics
+idle-player stats            # usage statistics
 ```
 
 Start at login without the installer:

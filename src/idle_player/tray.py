@@ -24,6 +24,7 @@ from .auth import (
 from .config import app_dir, load_config
 from .control import Controller
 from .loop import run, setup_logging, wait_for_network
+from .stats import StatsRecorder
 from .status import SmtcListener
 
 APP_NAME = "Spotify Perpetual"
@@ -97,7 +98,10 @@ def run_tray() -> int:
 
     sp = build_client(config)
     controller = Controller()
-    worker = threading.Thread(target=run, args=(config, sp, controller), daemon=True)
+    recorder = StatsRecorder()
+    worker = threading.Thread(
+        target=run, args=(config, sp, controller, recorder), daemon=True
+    )
     worker.start()
 
     icon = pystray.Icon("idle_player", _make_image(running=True), APP_NAME)

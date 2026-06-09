@@ -17,8 +17,9 @@ def test_main_wires_config_client_and_run(monkeypatch):
         calls["build"] = config
         return fake_client
 
-    def fake_run(config, sp):
+    def fake_run(config, sp, recorder=None):
         calls["run"] = (config, sp)
+        calls["recorder"] = recorder
 
     monkeypatch.setattr(entry, "load_config", fake_load_config)
     monkeypatch.setattr(entry, "build_client", fake_build_client)
@@ -34,6 +35,7 @@ def test_main_wires_config_client_and_run(monkeypatch):
     assert calls["load"] is True
     assert calls["build"] is fake_config
     assert calls["run"] == (fake_config, fake_client)
+    assert calls["recorder"] is not None  # stats recorder wired into the loop
 
 
 def test_main_aborts_loop_when_token_unhealthy(monkeypatch, capsys):
@@ -105,6 +107,15 @@ def test_main_dispatches_doctor(monkeypatch):
     entry.main(["doctor"])
 
     assert called["v"] is True
+
+
+def test_main_dispatches_stats(monkeypatch, capsys):
+    monkeypatch.setattr(entry, "load_stats", lambda: {"fake": True})
+    monkeypatch.setattr(entry, "format_stats", lambda data: f"REPORT {data}")
+
+    entry.main(["stats"])
+
+    assert "REPORT {'fake': True}" in capsys.readouterr().out
 
 
 def test_main_dispatches_setup(monkeypatch):
