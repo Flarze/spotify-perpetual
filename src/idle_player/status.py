@@ -73,12 +73,12 @@ def map_smtc(snapshot: Optional[SmtcSnapshot]) -> Optional[dict]:
 
 
 def label_for(snapshot: Optional[SmtcSnapshot]) -> str:
-    """A short human label for the tray: "playing: Song - Artist" / "idle"."""
+    """A short human label for the tray: "Playing: Song - Artist" / "Idle"."""
     playback = map_smtc(snapshot)
     if playback is None:
-        return "idle"
+        return "Idle"
     label = track_label(playback)
-    state = PLAYING if playback.get("is_playing") else PAUSED
+    state = (PLAYING if playback.get("is_playing") else PAUSED).capitalize()
     return f"{state}: {label}" if label else state
 
 

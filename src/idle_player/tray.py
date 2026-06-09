@@ -24,6 +24,7 @@ from .auth import (
 from .config import app_dir, load_config
 from .control import Controller
 from .loop import run, setup_logging, wait_for_network
+from .stats import StatsRecorder
 from .status import SmtcListener
 
 APP_NAME = "Spotify Perpetual"
@@ -97,7 +98,10 @@ def run_tray() -> int:
 
     sp = build_client(config)
     controller = Controller()
-    worker = threading.Thread(target=run, args=(config, sp, controller), daemon=True)
+    recorder = StatsRecorder()
+    worker = threading.Thread(
+        target=run, args=(config, sp, controller, recorder), daemon=True
+    )
     worker.start()
 
     icon = pystray.Icon("idle_player", _make_image(running=True), APP_NAME)
@@ -141,6 +145,12 @@ def run_tray() -> int:
     icon.menu = pystray.Menu(
         # Live track from SMTC when available, else the watcher status.
         pystray.MenuItem(lambda _i: controller.track() or controller.status(), None, enabled=False),
+        # Re-evaluated each time the menu opens, so the count stays current.
+        pystray.MenuItem(
+            lambda _i: f"Today: {recorder.today_interventions()} intervention(s)",
+            None,
+            enabled=False,
+        ),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(
             lambda _i: "Resume watching" if controller.paused else "Pause watching",

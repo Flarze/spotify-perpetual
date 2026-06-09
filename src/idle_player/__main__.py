@@ -8,6 +8,7 @@ runs it. Subcommands manage OS autostart:
     idle-player setup      interactively create config.yaml
     idle-player auth       (re-)authorize Spotify and cache the token
     idle-player doctor     run diagnostics and print a pass/fail report
+    idle-player stats      show usage statistics
     idle-player install    create an OS autostart entry
     idle-player uninstall  remove it
     idle-player status     report whether it is installed
@@ -29,6 +30,7 @@ from .auth import (
 )
 from .config import load_config
 from .loop import run, setup_logging, wait_for_network
+from .stats import StatsRecorder, format_stats, load_stats
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -44,6 +46,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     )
     sub.add_parser("tray", help="run the watcher with a system-tray icon")
     sub.add_parser("doctor", help="run diagnostics and print a pass/fail report")
+    sub.add_parser("stats", help="show usage statistics")
     install_p = sub.add_parser("install", help="create an OS autostart entry")
     install_p.add_argument(
         "--tray",
@@ -62,6 +65,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print(f"Authorized. Token cached at {config.token_cache_path}.")
     elif args.command == "doctor":
         run_doctor()
+    elif args.command == "stats":
+        print(format_stats(load_stats()))
     elif args.command == "tray":
         lock_path = single_instance.default_lock_path()
         if not single_instance.acquire(lock_path):
@@ -91,7 +96,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             if not _check_token(config):
                 return
             sp = build_client(config)
-            run(config, sp)
+            run(config, sp, recorder=StatsRecorder())
         finally:
             single_instance.release(lock_path)
 

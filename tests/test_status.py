@@ -58,19 +58,19 @@ def test_map_smtc_track_without_artist():
 
 
 def test_label_for_idle():
-    assert label_for(None) == "idle"
+    assert label_for(None) == "Idle"
 
 
 def test_label_for_playing():
-    assert label_for(SmtcSnapshot("playing", "Song", "Artist")) == "playing: Song — Artist"
+    assert label_for(SmtcSnapshot("playing", "Song", "Artist")) == "Playing: Song — Artist"
 
 
 def test_label_for_paused():
-    assert label_for(SmtcSnapshot("paused", "Song", "Artist")) == "paused: Song — Artist"
+    assert label_for(SmtcSnapshot("paused", "Song", "Artist")) == "Paused: Song — Artist"
 
 
 def test_label_for_stopped_has_no_track():
-    assert label_for(SmtcSnapshot("stopped")) == "paused"
+    assert label_for(SmtcSnapshot("stopped")) == "Paused"
 
 
 # --- ApiStatusSource / SmtcStatusSource -----------------------------------

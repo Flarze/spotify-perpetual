@@ -443,7 +443,7 @@ def test_run_once_sets_status_with_track_when_playing(tmp_path, monkeypatch):
     result = loop.run_once(make_config(tmp_path), sp, logging.getLogger("test"), None, ctrl)
 
     assert result == "skip"
-    assert ctrl.status() == "playing: Song — Artist"
+    assert ctrl.status() == "Playing: Song — Artist"
 
 
 def test_run_once_sets_status_on_start(tmp_path, monkeypatch):
@@ -472,6 +472,83 @@ def test_run_stops_on_premium_required_without_sleeping(tmp_path, monkeypatch):
     loop.run(config, object())
 
     assert slept == []
+
+
+# --- run() stats recording --------------------------------------------------
+
+
+class FakeRecorder:
+    def __init__(self):
+        self.sessions = 0
+        self.actions = []
+
+    def start_session(self):
+        self.sessions += 1
+
+    def record(self, action):
+        self.actions.append(action)
+
+
+def test_run_records_cycle_outcomes(tmp_path, monkeypatch):
+    from idle_player.control import Controller
+
+    config = make_config(tmp_path)
+    ctrl = Controller()
+    rec = FakeRecorder()
+    monkeypatch.setattr(
+        loop,
+        "run_once",
+        lambda *a, **k: "started",
+    )
+    monkeypatch.setattr(loop, "_sleep", lambda delay, c: c.stop() or True)
+
+    loop.run(config, object(), ctrl, rec)
+
+    assert rec.sessions == 1
+    assert rec.actions == ["started"]
+
+
+def test_run_records_error_on_transient_failure(tmp_path, monkeypatch):
+    from idle_player.control import Controller
+
+    config = make_config(tmp_path)
+    ctrl = Controller()
+    rec = FakeRecorder()
+
+    def boom(*a, **k):
+        raise RuntimeError("transient")
+
+    monkeypatch.setattr(loop, "run_once", boom)
+    monkeypatch.setattr(loop, "_sleep", lambda delay, c: c.stop() or True)
+
+    loop.run(config, object(), ctrl, rec)
+
+    assert rec.actions == ["error"]
+
+
+def test_run_records_error_on_premium_required(tmp_path, monkeypatch):
+    config = make_config(tmp_path)
+    rec = FakeRecorder()
+
+    def boom(*a, **k):
+        raise PremiumRequiredError("needs premium")
+
+    monkeypatch.setattr(loop, "run_once", boom)
+
+    loop.run(config, object(), recorder=rec)
+
+    assert rec.actions == ["error"]
+
+
+def test_run_without_recorder_unchanged(tmp_path, monkeypatch):
+    from idle_player.control import Controller
+
+    config = make_config(tmp_path)
+    ctrl = Controller()
+    monkeypatch.setattr(loop, "run_once", lambda *a, **k: "skip")
+    monkeypatch.setattr(loop, "_sleep", lambda delay, c: c.stop() or True)
+
+    loop.run(config, object(), ctrl)  # no recorder -> no crash
 
 
 # --- resume delay + status_source ------------------------------------------

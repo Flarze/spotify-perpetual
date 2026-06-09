@@ -150,7 +150,7 @@ def run_once(
     label = track_label(playback)
     if not should_start_playback(playback, config.paused_counts_as_playing):
         logger.info("playback active, nothing to do")
-        _status(f"playing: {label}" if label else "music playing")
+        _status(f"Playing: {label}" if label else "music playing")
         return "skip"
 
     # A loaded-but-paused session is what triggered us. Optional grace period:
@@ -167,7 +167,7 @@ def run_once(
         label = track_label(playback)
         if not should_start_playback(playback, config.paused_counts_as_playing):
             logger.info("no longer idle after grace; leaving it alone")
-            _status(f"playing: {label}" if label else "music playing")
+            _status(f"Playing: {label}" if label else "music playing")
             return "skip"
 
     # If configured, resume a paused track in place rather than starting a fresh
@@ -307,7 +307,7 @@ def _sleep(delay, controller) -> bool:
         return True
 
 
-def run(config: Config, sp, controller=None) -> None:
+def run(config: Config, sp, controller=None, recorder=None) -> None:
     """Poll forever: each interval, run one cycle. Resilient to transient errors.
 
     Transient API/network errors are logged and the loop continues, backing off
@@ -318,8 +318,14 @@ def run(config: Config, sp, controller=None) -> None:
     ``controller`` (optional) lets a UI pause/resume/stop the watcher and reads
     a status string the loop keeps updated. When omitted the loop runs forever
     as before.
+
+    ``recorder`` (optional, a :class:`~idle_player.stats.StatsRecorder`) counts
+    each cycle's outcome for ``idle-player stats``. Omitted in tests and
+    library use; the entry points wire one in.
     """
     logger = setup_logging(config)
+    if recorder is not None:
+        recorder.start_session()
     rotator = PlaylistRotator(config.playlists(), config.playlist_selection)
     logger.info(
         "idle_player started; polling every %ss, %d playlist(s), selection=%s",
@@ -348,8 +354,10 @@ def run(config: Config, sp, controller=None) -> None:
             continue
 
         try:
-            run_once(config, sp, logger, rotator, controller, status_source)
+            action = run_once(config, sp, logger, rotator, controller, status_source)
             failures = 0  # recovered: drop back to normal cadence
+            if recorder is not None:
+                recorder.record(action)
         except KeyboardInterrupt:
             logger.info("interrupted; shutting down")
             break
@@ -358,12 +366,16 @@ def run(config: Config, sp, controller=None) -> None:
             logger.error("%s", exc)
             if controller is not None:
                 controller.set_status("stopped - Premium required")
+            if recorder is not None:
+                recorder.record("error")
             break
         except Exception:  # noqa: BLE001 - keep the daemon alive on transient errors
             failures += 1
             logger.exception("transient error; continuing")
             if controller is not None:
                 controller.set_status("error - retrying")
+            if recorder is not None:
+                recorder.record("error")
 
         delay = _backoff_delay(config, failures)
         if failures:
