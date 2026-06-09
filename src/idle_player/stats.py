@@ -123,6 +123,13 @@ class StatsRecorder:
             self._prune(day)
             self._flush()
 
+    def today_interventions(self) -> int:
+        """How many times the watcher started/resumed playback today (for the
+        tray menu)."""
+        with self._lock:
+            counts = self._data["daily"].get(self._today().isoformat(), {})
+            return sum(counts.get(a, 0) for a in INTERVENTIONS)
+
     def _prune(self, today_iso: str) -> None:
         cutoff = (
             date.fromisoformat(today_iso) - timedelta(days=DAILY_RETENTION_DAYS)

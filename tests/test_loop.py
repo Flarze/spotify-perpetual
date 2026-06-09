@@ -443,7 +443,7 @@ def test_run_once_sets_status_with_track_when_playing(tmp_path, monkeypatch):
     result = loop.run_once(make_config(tmp_path), sp, logging.getLogger("test"), None, ctrl)
 
     assert result == "skip"
-    assert ctrl.status() == "playing: Song — Artist"
+    assert ctrl.status() == "Playing: Song — Artist"
 
 
 def test_run_once_sets_status_on_start(tmp_path, monkeypatch):

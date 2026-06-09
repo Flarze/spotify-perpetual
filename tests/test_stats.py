@@ -147,6 +147,29 @@ def test_daily_counts_pruned_after_retention(tmp_path):
     assert "2026-06-09" in daily
 
 
+def test_today_interventions_counts_only_today_starts_and_resumes(tmp_path):
+    path = tmp_path / "stats.json"
+    save_stats(
+        {
+            **load_stats(path),
+            "daily": {
+                "2026-06-09": {"started": 2, "resumed": 1, "skip": 50, "error": 1},
+                "2026-06-08": {"started": 9},  # yesterday: excluded
+            },
+        },
+        path,
+    )
+    rec, _ = make_recorder(tmp_path)
+
+    assert rec.today_interventions() == 3
+
+
+def test_today_interventions_zero_when_no_data(tmp_path):
+    rec, _ = make_recorder(tmp_path)
+
+    assert rec.today_interventions() == 0
+
+
 def test_record_survives_failed_write(tmp_path, monkeypatch):
     rec, _ = make_recorder(tmp_path)
 

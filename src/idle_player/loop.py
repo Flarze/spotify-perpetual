@@ -150,7 +150,7 @@ def run_once(
     label = track_label(playback)
     if not should_start_playback(playback, config.paused_counts_as_playing):
         logger.info("playback active, nothing to do")
-        _status(f"playing: {label}" if label else "music playing")
+        _status(f"Playing: {label}" if label else "music playing")
         return "skip"
 
     # A loaded-but-paused session is what triggered us. Optional grace period:
@@ -167,7 +167,7 @@ def run_once(
         label = track_label(playback)
         if not should_start_playback(playback, config.paused_counts_as_playing):
             logger.info("no longer idle after grace; leaving it alone")
-            _status(f"playing: {label}" if label else "music playing")
+            _status(f"Playing: {label}" if label else "music playing")
             return "skip"
 
     # If configured, resume a paused track in place rather than starting a fresh
