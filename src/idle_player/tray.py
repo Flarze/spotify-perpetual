@@ -24,7 +24,7 @@ from .auth import (
 from .config import app_dir, load_config
 from .control import Controller
 from .loop import run, setup_logging, wait_for_network
-from .stats import StatsRecorder
+from .stats import StatsRecorder, format_stats, format_summary
 from .status import SmtcListener
 
 APP_NAME = "Spotify Perpetual"
@@ -138,18 +138,45 @@ def run_tray() -> int:
         cfg = app_dir() / "config.yaml"
         _open_path(cfg if cfg.exists() else cfg.parent)
 
+    def _summary_line(index: int) -> str:
+        """The index-th summary line from a fresh snapshot, re-read each time
+        the menu opens so the numbers stay live."""
+        lines = format_summary(recorder.snapshot())
+        return lines[index] if index < len(lines) else ""
+
+    def on_full_report(_icon, _item) -> None:
+        # Write the full report (totals + 7-day history) and open it so the
+        # user gets everything the `stats` CLI prints, in their text viewer.
+        report = app_dir() / "stats-report.txt"
+        try:
+            report.write_text(format_stats(recorder.snapshot()), encoding="utf-8")
+        except OSError:
+            _open_path(app_dir())
+            return
+        _open_path(report)
+
     def on_quit(_icon, _item) -> None:
         controller.stop()
         _icon.stop()
 
+    # One disabled line per summary metric; default-arg binds the index so each
+    # lambda reports its own line when the submenu is rendered.
+    summary_items = [
+        pystray.MenuItem(lambda _i, idx=k: _summary_line(idx), None, enabled=False)
+        for k in range(len(format_summary(recorder.snapshot())))
+    ]
+
     icon.menu = pystray.Menu(
         # Live track from SMTC when available, else the watcher status.
         pystray.MenuItem(lambda _i: controller.track() or controller.status(), None, enabled=False),
-        # Re-evaluated each time the menu opens, so the count stays current.
+        # Live numbers in a submenu, plus a full report opened in a text viewer.
         pystray.MenuItem(
-            lambda _i: f"Today: {recorder.today_interventions()} intervention(s)",
-            None,
-            enabled=False,
+            "Statistics",
+            pystray.Menu(
+                *summary_items,
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("Open full report", on_full_report),
+            ),
         ),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(
