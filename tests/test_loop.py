@@ -526,6 +526,32 @@ def test_run_records_error_on_transient_failure(tmp_path, monkeypatch):
     assert rec.actions == ["error"]
 
 
+def test_run_logs_network_error_terse_without_traceback(tmp_path, monkeypatch, caplog):
+    from requests.exceptions import ConnectionError as RequestsConnectionError
+
+    from idle_player.control import Controller
+
+    config = make_config(tmp_path)
+    ctrl = Controller()
+    rec = FakeRecorder()
+
+    def boom(*a, **k):
+        raise RequestsConnectionError("Connection aborted. WinError 10054")
+
+    monkeypatch.setattr(loop, "run_once", boom)
+    monkeypatch.setattr(loop, "_sleep", lambda delay, c: c.stop() or True)
+
+    with caplog.at_level("WARNING"):
+        loop.run(config, object(), ctrl, rec)
+
+    # Still treated as a failure (records error, backs off)...
+    assert rec.actions == ["error"]
+    # ...but logged as a terse WARNING, not an ERROR-level traceback.
+    msgs = [r for r in caplog.records if "transient network error" in r.message]
+    assert msgs and all(r.levelname == "WARNING" and r.exc_info is None for r in msgs)
+    assert not any(r.message == "transient error; continuing" for r in caplog.records)
+
+
 def test_run_records_error_on_premium_required(tmp_path, monkeypatch):
     config = make_config(tmp_path)
     rec = FakeRecorder()

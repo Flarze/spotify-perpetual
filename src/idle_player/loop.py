@@ -14,6 +14,9 @@ import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import Timeout as RequestsTimeout
+
 from .auth import build_client
 from .config import Config, app_dir, load_config
 from .player import (
@@ -369,6 +372,17 @@ def run(config: Config, sp, controller=None, recorder=None) -> None:
             if recorder is not None:
                 recorder.record("error")
             break
+        except (RequestsConnectionError, RequestsTimeout) as exc:
+            # Expected network blip (e.g. WinError 10054, the remote forcibly
+            # closing the socket). The backoff below already retries, so log a
+            # terse one-liner instead of a multi-line traceback that floods the
+            # log on every transient drop.
+            failures += 1
+            logger.warning("transient network error; continuing: %s", exc)
+            if controller is not None:
+                controller.set_status("error - retrying")
+            if recorder is not None:
+                recorder.record("error")
         except Exception:  # noqa: BLE001 - keep the daemon alive on transient errors
             failures += 1
             logger.exception("transient error; continuing")
