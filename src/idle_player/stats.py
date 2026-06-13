@@ -11,6 +11,7 @@ one on load, and a failed write is logged and swallowed.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import threading
@@ -130,6 +131,12 @@ class StatsRecorder:
             counts = self._data["daily"].get(self._today().isoformat(), {})
             return sum(counts.get(a, 0) for a in INTERVENTIONS)
 
+    def snapshot(self) -> dict:
+        """A deep copy of the live stats, for the tray to render without
+        touching the recorder's mutable state or re-reading the file."""
+        with self._lock:
+            return copy.deepcopy(self._data)
+
     def _prune(self, today_iso: str) -> None:
         cutoff = (
             date.fromisoformat(today_iso) - timedelta(days=DAILY_RETENTION_DAYS)
@@ -195,3 +202,28 @@ def format_stats(data: dict, today=date.today) -> str:
                 f"    {day}   checks {day_checks}, interventions {day_acted}"
             )
     return "\n".join(lines)
+
+
+# Fixed-width labels so the values line up in the tray's monospace-ish menu.
+def format_summary(data: dict, today=date.today) -> list[str]:
+    """Short one-line-per-metric summary for the tray's Statistics submenu.
+
+    Always returns the same set of lines (zeros before any data), so the menu
+    layout is stable. The full breakdown with the 7-day history stays in
+    :func:`format_stats` (the "Open full report" action / CLI).
+    """
+    totals = data.get("totals", {})
+    checks = sum(totals.get(a, 0) for a in ACTIONS if a != "error")
+    interventions = sum(totals.get(a, 0) for a in INTERVENTIONS)
+    daily = data.get("daily", {}).get(today().isoformat(), {})
+    today_checks = sum(daily.get(a, 0) for a in ACTIONS if a != "error")
+    today_acted = sum(daily.get(a, 0) for a in INTERVENTIONS)
+    return [
+        f"Watch time      {_format_duration(data.get('runtime_seconds', 0))}",
+        f"Checks          {checks}",
+        f"Interventions   {interventions}"
+        f" (started {totals.get('started', 0)}, resumed {totals.get('resumed', 0)})",
+        f"No device       {totals.get('no_device', 0)}",
+        f"Errors          {totals.get('error', 0)}",
+        f"Today           {today_checks} checks, {today_acted} interventions",
+    ]

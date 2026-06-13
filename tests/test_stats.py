@@ -4,7 +4,13 @@ import json
 from datetime import date
 
 from idle_player import stats
-from idle_player.stats import StatsRecorder, format_stats, load_stats, save_stats
+from idle_player.stats import (
+    StatsRecorder,
+    format_stats,
+    format_summary,
+    load_stats,
+    save_stats,
+)
 
 
 class FakeClock:
@@ -179,6 +185,56 @@ def test_record_survives_failed_write(tmp_path, monkeypatch):
     monkeypatch.setattr(stats, "save_stats", boom)
 
     rec.record("started")  # must not raise
+
+
+# --- snapshot ---------------------------------------------------------------
+
+
+def test_snapshot_reflects_recorded_data(tmp_path):
+    rec, _ = make_recorder(tmp_path)
+    rec.record("started")
+    rec.record("skip")
+
+    snap = rec.snapshot()
+    assert snap["totals"] == {"started": 1, "skip": 1}
+
+
+def test_snapshot_is_a_copy_not_the_live_state(tmp_path):
+    rec, _ = make_recorder(tmp_path)
+    rec.record("started")
+
+    snap = rec.snapshot()
+    snap["totals"]["started"] = 999  # mutate the copy
+    snap["daily"].clear()
+
+    assert rec.snapshot()["totals"]["started"] == 1  # recorder unaffected
+
+
+# --- format_summary ---------------------------------------------------------
+
+
+def test_format_summary_zeroed_before_any_data(tmp_path):
+    lines = format_summary(load_stats(tmp_path / "stats.json"))
+    assert len(lines) == 6
+    assert lines[1] == "Checks          0"
+    assert lines[4] == "Errors          0"
+
+
+def test_format_summary_counts_and_today(tmp_path):
+    data = {
+        **load_stats(tmp_path / "stats.json"),
+        "runtime_seconds": 3 * 3600 + 25 * 60,
+        "totals": {"skip": 40, "started": 5, "resumed": 2, "no_device": 1, "error": 3},
+        "daily": {"2026-06-09": {"skip": 8, "started": 1, "resumed": 1}},
+    }
+    lines = format_summary(data, today=lambda: date(2026, 6, 9))
+
+    assert lines[0] == "Watch time      3h 25m"
+    assert lines[1] == "Checks          48"  # 40 + 5 + 2 + 1 (error excluded)
+    assert lines[2] == "Interventions   7 (started 5, resumed 2)"
+    assert lines[3] == "No device       1"
+    assert lines[4] == "Errors          3"
+    assert lines[5] == "Today           10 checks, 2 interventions"
 
 
 # --- format_stats -----------------------------------------------------------
