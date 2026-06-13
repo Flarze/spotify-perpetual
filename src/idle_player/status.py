@@ -134,17 +134,62 @@ def _media_control():
     return control
 
 
+# Transient COM/WinRT errors that mean "the media app was momentarily busy".
+# The WinRT projection surfaces these as ``OSError`` with a signed ``winerror``
+# HRESULT in the RPC_E_CALL_* family. They are spurious - a short in-place retry
+# almost always succeeds - so we retry rather than let them propagate to the
+# loop, where they would escalate the backoff (5s -> 10s -> 20s -> 40s) and stop
+# monitoring playback for no real reason.
+_RETRYABLE_HRESULTS = frozenset(
+    {
+        -2147418111,  # 0x80010001 RPC_E_CALL_REJECTED
+        -2147418110,  # 0x80010002 RPC_E_CALL_CANCELED ("canceled by the message filter")
+        -2147417846,  # 0x8001010A RPC_E_SERVERCALL_RETRYLATER
+    }
+)
+SMTC_READ_ATTEMPTS = 3
+SMTC_RETRY_SECONDS = 0.3
+
+
+def _read_with_retry(read, attempts, retry_seconds, sleep) -> Optional[SmtcSnapshot]:
+    """Call ``read`` (a 0-arg WinRT reader), retrying transient COM rejections.
+
+    Only HRESULTs in :data:`_RETRYABLE_HRESULTS` are retried; any other error -
+    and the final attempt - propagates so a genuine read failure still reaches
+    the loop's backoff. Pure (``read``/``sleep`` injected) so it is unit-tested
+    without WinRT.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            return read()
+        except OSError as exc:
+            if (
+                getattr(exc, "winerror", None) not in _RETRYABLE_HRESULTS
+                or attempt == attempts
+            ):
+                raise
+            sleep(retry_seconds)
+    return None  # unreachable: the loop always returns or raises
+
+
 def _read_smtc() -> Optional[SmtcSnapshot]:
     """Read the current Spotify SMTC session synchronously (Windows only).
 
-    Returns None when no Spotify media session exists. Raises on a WinRT
-    failure so the caller can distinguish "nothing playing" from "could not
-    read". Spotify is matched by a substring of the source app id so both the
-    desktop (``Spotify.exe``) and Microsoft Store builds match.
+    Returns None when no Spotify media session exists. Retries transient COM
+    rejections; raises any other WinRT failure so the caller can distinguish
+    "nothing playing" from "could not read". Spotify is matched by a substring
+    of the source app id so both the desktop (``Spotify.exe``) and Microsoft
+    Store builds match.
     """
     import asyncio
+    import time
 
-    return asyncio.run(_async_read_smtc())
+    return _read_with_retry(
+        lambda: asyncio.run(_async_read_smtc()),
+        SMTC_READ_ATTEMPTS,
+        SMTC_RETRY_SECONDS,
+        time.sleep,
+    )
 
 
 async def _async_read_smtc() -> Optional[SmtcSnapshot]:

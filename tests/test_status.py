@@ -13,6 +13,7 @@ from idle_player.status import (
     SmtcListener,
     SmtcSnapshot,
     SmtcStatusSource,
+    _read_with_retry,
     label_for,
     map_smtc,
 )
@@ -97,6 +98,62 @@ def test_smtc_status_source_read_failure_propagates():
 
     with pytest.raises(RuntimeError):
         SmtcStatusSource(reader=boom).get_playback()
+
+
+# --- _read_with_retry (transient COM rejection handling) ------------------
+
+
+def _oserror(winerror):
+    exc = OSError("com rejected")
+    exc.winerror = winerror
+    return exc
+
+
+def test_read_with_retry_returns_first_success():
+    sleeps = []
+    snap = SmtcSnapshot("playing", "S", "A")
+    assert _read_with_retry(lambda: snap, 3, 0.3, sleeps.append) is snap
+    assert sleeps == []  # no retry needed
+
+
+def test_read_with_retry_recovers_after_transient_com_reject():
+    # WinError -2147418110 = RPC_E_CALL_CANCELED ("canceled by the message
+    # filter"), the error seen in the logs. Second attempt succeeds.
+    calls = []
+    sleeps = []
+
+    def read():
+        calls.append(1)
+        if len(calls) == 1:
+            raise _oserror(-2147418110)
+        return SmtcSnapshot("paused", "S", "A")
+
+    result = _read_with_retry(read, 3, 0.3, sleeps.append)
+    assert result.status == "paused"
+    assert len(calls) == 2
+    assert sleeps == [0.3]  # backed off once between attempts
+
+
+def test_read_with_retry_exhausts_attempts_then_raises():
+    sleeps = []
+
+    def read():
+        raise _oserror(-2147418110)
+
+    with pytest.raises(OSError):
+        _read_with_retry(read, 3, 0.3, sleeps.append)
+    assert sleeps == [0.3, 0.3]  # slept between the 3 attempts, not after last
+
+
+def test_read_with_retry_does_not_retry_other_oserror():
+    sleeps = []
+
+    def read():
+        raise _oserror(-1)  # not a transient COM rejection
+
+    with pytest.raises(OSError):
+        _read_with_retry(read, 3, 0.3, sleeps.append)
+    assert sleeps == []  # propagated immediately, no retry
 
 
 # --- SmtcListener ---------------------------------------------------------
